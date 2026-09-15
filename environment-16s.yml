@@ -1,0 +1,25 @@
+name: microfgt-16s
+channels:
+  - conda-forge
+  - bioconda
+# Lean 16S-only environment. Use this when you only need the 16S arm (DADA2 -> ASVs ->
+# speciateIT -> VALENCIA CST). It deliberately leaves out the shotgun/VISTA stack, whose
+# r-randomforestsrc has no arm64 build and fails to solve on Apple Silicon (poisoning the
+# whole bundled environment.yml). Everything here solves cleanly on macOS arm64.
+#
+# This is convenience/guidance, NOT something `microfgt setup` runs — the user owns their
+# environment (laptop vs shared cluster differ); `microfgt setup` owns the FGT-specific
+# tools + databases. For the full 16S + shotgun stack, use environment.yml instead.
+#
+# After creating and activating this env, run `pip install -e ".[dev]"` to install the
+# package + its Python deps (single source of truth in pyproject.toml; not duplicated here).
+#
+# speciateIT (taxonomy binary) and the vSpeciateDB reference models are NOT on bioconda —
+# install them separately via `microfgt setup --region <R> --dest <dir>` (see
+# design/install_runbook_16s.md).
+dependencies:
+  - python>=3.10
+  - pip
+  # --- 16S front-end tools: the reason to use conda over plain pip ---
+  - cutadapt           # primer trimming
+  - bioconductor-dada2 # denoising -> ASV table + rep-seqs (pulls in r-base)

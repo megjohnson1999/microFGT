@@ -1,0 +1,212 @@
+name: Automated Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: '0 1 * * *'  # Daily tests at 1 AM UTC
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  test:
+    runs-on: ${{ matrix.config.os }}
+    
+    name: ${{ matrix.config.os }} (${{ matrix.config.r }})
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - {os: ubuntu-latest,   r: 'release'}
+          - {os: ubuntu-latest,   r: 'devel'}
+          - {os: ubuntu-latest,   r: 'oldrel'}
+          - {os: windows-latest,  r: 'release'}
+          - {os: macos-latest,    r: 'release'}
+    
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      R_KEEP_PKG_SOURCE: yes
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - uses: r-lib/actions/setup-pandoc@v2
+      
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: ${{ matrix.config.r }}
+          http-user-agent: ${{ matrix.config.http-user-agent }}
+          use-public-rspm: true
+      
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: any::covr, any::testthat, any::knitr, any::rmarkdown
+          needs: coverage
+      
+      - name: Test package
+        run: |
+          testthat::test_local()
+        shell: Rscript {0}
+      
+      - name: Check coverage
+        if: matrix.config.os == 'ubuntu-latest' && matrix.config.r == 'release'
+        run: |
+          covr::codecov(
+            quiet = FALSE,
+            clean = FALSE,
+            install_path = file.path(Sys.getenv("RUNNER_TEMP"), "package")
+          )
+        shell: Rscript {0}
+      
+      - name: Show testthat output
+        if: always()
+        run: |
+          ## --------------------------------------------------------------------
+          find ${{ runner.temp }}/package -name 'testthat.Rout*' -exec cat '{}' \; || true
+        shell: bash
+      
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-test-failures
+          path: ${{ runner.temp }}/package
+
+  performance-tests:
+    runs-on: ubuntu-latest
+    name: Performance Benchmarks
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+      
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: any::bench, any::profvis
+      
+      - name: Run performance tests
+        run: |
+          # Run performance benchmarks
+          source("tests/testthat/helper-test-reporting.R")
+          
+          # Define test cases
+          test_cases <- list(
+            small = generate_test_fixture("standard"),
+            medium = generate_test_fixture("large", rows = 1000, cols = 50),
+            large = generate_test_fixture("large", rows = 5000, cols = 100),
+            sparse = generate_test_fixture("sparse", rows = 10000, cols = 100, sparsity = 0.95)
+          )
+          
+          # Run benchmarks
+          results <- list()
+          for (name in names(test_cases)) {
+            data <- test_cases[[name]]
+            
+            # Time FGTExperiment creation
+            creation_time <- system.time({
+              fgt <- FGTExperiment(
+                assays = list(counts = data$counts),
+                rowData = DataFrame(data$taxonomy),
+                colData = DataFrame(data$metadata),
+                experimentType = "amplicon"
+              )
+            })
+            
+            # Time transformations
+            transform_times <- list()
+            for (type in c("relative", "log", "clr")) {
+              transform_times[[type]] <- system.time({
+                transformAbundance(fgt, type = type)
+              })["elapsed"]
+            }
+            
+            results[[name]] <- list(
+              creation = creation_time["elapsed"],
+              transformations = transform_times,
+              dimensions = dim(data$counts)
+            )
+          }
+          
+          # Save results
+          saveRDS(results, "performance_results.rds")
+          
+          # Generate report
+          cat("# Performance Test Results\n\n")
+          for (name in names(results)) {
+            res <- results[[name]]
+            cat(sprintf("## %s dataset (%d x %d)\n", 
+                       toupper(name), res$dimensions[1], res$dimensions[2]))
+            cat(sprintf("- Creation: %.3f seconds\n", res$creation))
+            cat("- Transformations:\n")
+            for (trans in names(res$transformations)) {
+              cat(sprintf("  - %s: %.3f seconds\n", trans, res$transformations[[trans]]))
+            }
+            cat("\n")
+          }
+        shell: Rscript {0}
+      
+      - name: Upload performance results
+        uses: actions/upload-artifact@v3
+        with:
+          name: performance-results
+          path: performance_results.rds
+
+  integration-tests:
+    runs-on: ubuntu-latest
+    name: Platform Integration Tests
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+      
+      - uses: r-lib/actions/setup-r-dependencies@v2
+      
+      - name: Run integration tests
+        run: |
+          testthat::test_file("tests/testthat/test-platform-integration-comprehensive.R")
+          testthat::test_file("tests/testthat/test-analysis-workflows.R")
+        shell: Rscript {0}
+
+  report:
+    needs: [test, performance-tests, integration-tests]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - uses: r-lib/actions/setup-r@v2
+      
+      - name: Download artifacts
+        uses: actions/download-artifact@v3
+      
+      - name: Generate summary report
+        run: |
+          cat > test_summary.md << 'EOF'
+          # Test Summary Report
+          
+          Date: $(date)
+          Commit: ${{ github.sha }}
+          
+          ## Test Matrix Results
+          
+          | OS | R Version | Status |
+          |---|---|---|
+          EOF
+          
+          # Add results from matrix (this would need actual parsing of test results)
+          echo "Report generation complete"
+      
+      - name: Upload summary
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-summary
+          path: test_summary.md

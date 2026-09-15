@@ -1,0 +1,31 @@
+name: microfgt
+channels:
+  - conda-forge
+  - bioconda
+# conda provides the Python interpreter + the external bioinformatics tools that pip
+# cannot install. microFGT's own Python deps live in pyproject.toml — after creating and
+# activating this env, run `pip install -e ".[dev]"` to install the package + its deps
+# (single source of truth; intentionally not duplicated here).
+dependencies:
+  - python>=3.10
+  - pip
+  # --- 16S front-end tools (Tier 1): the reason to use conda over plain pip ---
+  - cutadapt           # primer trimming
+  - bioconductor-dada2 # denoising -> ASV table + rep-seqs (pulls in r-base)
+  # --- metagenomics (shotgun) front-end tools ---
+  - fastp              # QC / adapter + quality trim
+  - minimap2           # host removal (map vs host genome)
+  - samtools           # host removal (filter both-mates-unmapped, re-emit FASTQ)
+  - bowtie2            # used internally by VIRGO2 mapping
+  # VISTA (mgCST) classifier: R + its five packages. Kept in this one env — the audit's
+  # scratch env proved they coexist; if a solve ever turns ugly, split these into a
+  # separate environment-vista.yml.
+  - r-base>=4.3
+  - r-randomforestsrc
+  - r-pheatmap
+  - r-dplyr
+  - r-data.table
+  - r-r.utils
+  # NOTE: speciateIT (taxonomy), VIRGO2 (gene catalog + index), and the VISTA repo/VISTA_data
+  # are NOT on bioconda; they and their reference databases install separately — see the
+  # README's "external tools" section and prototype/reference_scripts/RECIPE.md.

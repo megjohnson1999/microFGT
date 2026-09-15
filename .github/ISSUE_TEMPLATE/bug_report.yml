@@ -1,0 +1,68 @@
+name: Bug Report
+description: File a bug report
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report\!
+  - type: input
+    id: version
+    attributes:
+      label: Package Version
+      description: What version of microFGT are you using?
+      placeholder: ex. 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: r-version
+    attributes:
+      label: R Version
+      description: What version of R are you using?
+      placeholder: ex. 4.1.2
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating System
+      description: Which operating system are you using?
+      placeholder: ex. macOS Monterey
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Also tell us, what did you expect to happen?
+      placeholder: Describe the bug and expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: code
+    attributes:
+      label: Reproducible Example
+      description: Please provide a minimal reproducible example
+      placeholder: |
+        ```r
+        library(microFGT)
+        # Your code here
+        ```
+      render: R
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Error Messages
+      description: Please copy and paste any relevant error messages
+      render: shell
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Code of Conduct
+      description: By submitting this issue, you agree to follow our Code of Conduct
+      options:
+        - label: I agree to follow the project Code of Conduct
+          required: true

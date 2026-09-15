@@ -1,0 +1,34 @@
+# Example microFGT config — BOTH arms in one run (16S + metagenomics -> one MuData).
+#
+# Include a 16S `composition:` block AND a `metagenomics:` block; microFGT runs both chains and
+# assembles a single object. CST (16S) and mgCST (shotgun) are kept as separate .obs columns —
+# never merged — and sample reconciliation over the union is reported in .uns.
+#
+#   microfgt check -c my_run.yaml     # verifies BOTH arms' tools + DB paths
+#   microfgt run   -c my_run.yaml
+#
+# Real-data template (needs both stacks' tools + DBs). Use this only for a truly co-assayed
+# cohort (same samples run on 16S and shotgun); for separate cohorts, run each arm on its own.
+
+# ── 16S arm ──────────────────────────────────────────────────────────────────────────────
+composition:
+  speciateit:
+    results: MC_order7_results.txt         # or reads:/phyloseq: — see example_16s_config.yaml
+    count_table: asv_counts.csv
+cst:
+  method: centroid
+
+# ── metagenomics (shotgun) arm ───────────────────────────────────────────────────────────
+metagenomics:
+  reads:
+    fastq_dir: raw_shotgun/
+  host_ref:   /path/to/GRCh38.fna.gz
+  virgo2_dir: /path/to/VIRGO2
+  vista_repo: /path/to/VISTA
+  threads: 8
+
+analysis:                                   # runs on the 16S composition modality
+  transforms: [relabund, clr]
+  alpha: [shannon]
+
+output: /tmp/microfgt_combined_demo.h5mu

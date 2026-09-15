@@ -1,0 +1,105 @@
+name: Package Load Test
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "R/**"
+      - "src/**"
+      - "NAMESPACE"
+      - "DESCRIPTION"
+      - ".github/workflows/package-load-test.yaml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "R/**"
+      - "src/**"
+      - "NAMESPACE"
+      - "DESCRIPTION"
+      - ".github/workflows/package-load-test.yaml"
+
+# Avoid duplicate workflow executions
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package-load-test:
+    name: Test package loading
+    runs-on: ubuntu-22.04
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      R_KEEP_PKG_SOURCE: yes
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+          use-public-rspm: true
+
+      - name: Install dependencies
+        uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: |
+            any::rcmdcheck
+            any::remotes
+            any::roxygen2
+          needs: check
+
+      - name: Build package
+        run: |
+          R CMD build .
+
+      - name: Install package
+        run: |
+          PKG_FILE=$(ls -1t *.tar.gz | head -n 1)
+          R CMD INSTALL ${PKG_FILE}
+
+      - name: Test package load
+        run: |
+          Rscript -e 'if (!require("microFGT")) { stop("Failed to load the microFGT package") } else { cat("Package loaded successfully!\n") }'
+
+      - name: Check package exports
+        run: |
+          Rscript -e '
+          if (!require("microFGT")) { 
+            stop("Failed to load the microFGT package") 
+          }
+          
+          # List and check exported items
+          exports <- ls("package:microFGT")
+          cat("Exported objects:", length(exports), "\n")
+          cat("Some exports:", paste(head(exports, 10), collapse=", "), "...\n")
+          
+          # Check if FGTExperiment class is properly exported
+          if ("FGTExperiment" %in% exports) {
+            cat("FGTExperiment constructor is exported\n")
+          } else {
+            cat("WARNING: FGTExperiment constructor is not exported\n")
+          }
+          
+          if (isS4(methods::getClass("FGTExperiment"))) {
+            cat("FGTExperiment class is properly defined as S4 class\n")
+          } else {
+            cat("WARNING: FGTExperiment is not properly defined as S4 class\n")
+          }
+          
+          # Check recently added functions
+          new_functions <- c("classify_with_speciateit", 
+                            "default_speciateit_db", 
+                            "is_speciateit_available", 
+                            "run_speciateit")
+          
+          missing <- setdiff(new_functions, exports)
+          if (length(missing) > 0) {
+            cat("WARNING: Some functions are missing from exports:", 
+                paste(missing, collapse=", "), "\n")
+          } else {
+            cat("All expected functions are exported\n")
+          }
+          '

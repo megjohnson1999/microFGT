@@ -1,0 +1,51 @@
+# CI Workflow Management for microFGT
+# Validates CI/CD workflow configurations
+
+name: CI Management Workflow
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - '.github/workflows/**'
+      - 'codecov.yml'
+      - '_pkgdown.yml'
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Reason for triggering the workflow run'
+        required: false
+        default: 'Manual validation request'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Validate Workflow Files
+        run: |
+          echo "Validating workflow files..."
+          echo "Trigger reason: ${{ github.event.inputs.reason || 'Push event' }}"
+
+          # List all workflow files
+          echo "Found workflow files:"
+          ls -la .github/workflows/
+
+          # Validate YAML syntax in each workflow file
+          for file in .github/workflows/*.{yaml,yml}; do
+            if [ -f "$file" ]; then
+              echo "Checking $file"
+              cat "$file" | python3 -c "import sys, yaml; yaml.safe_load(sys.stdin)" && echo "✅ $file is valid" || echo "❌ Error in $file"
+            fi
+          done
+
+          # Check for duplicate workflow names
+          echo "Checking for duplicate workflow names..."
+          grep -h "^name:" .github/workflows/*.{yaml,yml} | sort | uniq -c | sort -nr
+
+          echo "Workflow validation complete"

@@ -1,0 +1,132 @@
+---
+title: "Introduction to microFGT"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Introduction to microFGT}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(microFGT)
+```
+
+## Introduction
+
+microFGT is an integrated R package for comprehensive analysis of female genital tract (FGT) microbiome data. This package unifies specialized tools within a cohesive framework that handles both amplicon and metagenomic sequencing data.
+
+## Basic Workflow
+
+This vignette demonstrates a basic workflow for analyzing amplicon sequencing data with microFGT.
+
+### Creating an FGTExperiment Object
+
+First, we'll create a simple example dataset:
+
+```{r example-data}
+# Create a simple count matrix
+counts <- matrix(sample(0:100, 60, replace = TRUE), nrow = 10, ncol = 6)
+rownames(counts) <- paste0("Feature", 1:10)
+colnames(counts) <- paste0("Sample", 1:6)
+
+# Feature metadata
+taxa <- data.frame(
+  Kingdom = rep("Bacteria", 10),
+  Phylum = sample(c("Firmicutes", "Bacteroidetes"), 10, replace = TRUE),
+  Genus = sample(c("Lactobacillus", "Gardnerella", "Prevotella", "Sneathia"), 
+                10, replace = TRUE),
+  row.names = rownames(counts)
+)
+
+# Sample metadata
+metadata <- data.frame(
+  group = rep(c("A", "B"), each = 3),
+  row.names = colnames(counts)
+)
+
+# Create FGTExperiment object
+fgt_exp <- FGTExperiment(
+  assays = list(counts = counts),
+  rowData = taxa,
+  colData = metadata
+)
+
+# Look at the object
+fgt_exp
+```
+
+### Filtering and Transforming Data
+
+Next, we'll filter low-abundance features and transform the count data:
+
+```{r filter-transform}
+# Filter taxa
+filtered_exp <- filter_taxa(fgt_exp, min_prevalence = 0.5, min_abundance = 0.01)
+
+# Compare dimensions before and after filtering
+dim(fgt_exp)
+dim(filtered_exp)
+
+# Transform to relative abundance
+rel_exp <- transform_abundance(filtered_exp, type = "relative")
+
+# Check assays
+names(SummarizedExperiment::assays(rel_exp))
+```
+
+### Taxonomic Analysis
+
+We can analyze the taxonomic composition of our samples:
+
+```{r taxonomic-analysis}
+# Aggregate at genus level
+genus_exp <- aggregate_taxa(rel_exp, rank = "Genus")
+
+# Look at dimensions
+dim(genus_exp)
+
+# Extract as tibble
+genus_abundances <- get_taxa_abundances(genus_exp, assay_name = "counts")
+head(genus_abundances)
+```
+
+### Visualization
+
+microFGT provides functions for common visualizations:
+
+```{r visualization}
+# Plot taxonomic composition
+plot_taxa_composition(rel_exp, rank = "Genus", top_n = 5, group_var = "group")
+
+# Plot alpha diversity
+plot_alpha_diversity(fgt_exp, metrics = c("observed", "shannon"), group_var = "group")
+```
+
+## Working with Real Data
+
+For real analyses, you would typically import data from common formats:
+
+```{r real-data, eval=FALSE}
+# From dada2
+# seqtab <- readRDS("seqtab.rds")
+# taxa <- readRDS("taxa.rds")
+# metadata <- read.csv("metadata.csv", row.names = 1)
+# 
+# fgt_exp <- import_dada2(seqtab, taxa, metadata)
+
+# From phyloseq
+# library(phyloseq)
+# data(GlobalPatterns)
+# fgt_exp <- phyloseq_to_fgt(GlobalPatterns)
+```
+
+## Conclusion
+
+This vignette demonstrated the basic functionality of microFGT. For more advanced features and integrations with specific tools, please refer to the other vignettes and function documentation.

@@ -1,0 +1,25 @@
+# microFGT CODEOWNERS file
+# This file defines who is responsible for reviewing changes to different parts of the codebase
+
+# Default owners for everything
+*                     @shandley
+
+# Core implementation files
+/R/core/              @shandley
+/R/functions/         @shandley
+
+# Documentation
+/vignettes/           @shandley
+/man/                 @shandley
+/README.md            @shandley
+
+# Testing
+/tests/               @shandley
+
+# CI and build
+/.github/             @shandley
+/codecov.yml          @shandley
+/_pkgdown.yml         @shandley
+
+# Development docs
+/development/         @shandley

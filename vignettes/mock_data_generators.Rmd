@@ -1,0 +1,387 @@
+---
+title: "Using Mock Data Generators"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Using Mock Data Generators}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 5
+)
+```
+
+## Introduction
+
+The microFGT package includes a set of mock data generators that create realistic simulated data for three key FGT microbiome analysis tools:
+
+1. **SpeciateIT** - Taxonomic classification for vaginal microbiome sequences
+2. **VIRGO** - Vaginal gene catalog and functional profiling
+3. **VALENCIA** - Community state type (CST) classifier
+
+These mock data generators are valuable for:
+
+- Testing code without requiring the actual tools to be installed
+- Creating reproducible examples for documentation and teaching
+- Developing new analysis methods with controlled test data
+- Benchmarking algorithm performance with known inputs
+
+## Loading the Mock Data Generators
+
+First, you need to load the microFGT package:
+
+```{r setup, eval=FALSE}
+library(microFGT)
+
+# Load mock data generators
+source(system.file("examples", "mock_data_generators.R", package = "microFGT"))
+```
+
+This makes all generator functions available in your R session.
+
+## Generating Mock SpeciateIT Data
+
+SpeciateIT generates taxonomic classifications for 16S rRNA sequences. The mock data generator creates data that mimics the format of SpeciateIT's `MC_order7_results.txt` output file.
+
+### Basic Usage
+
+```{r speciateit-basic, eval=FALSE}
+# Generate mock data for 100 sequences
+speciateit_data <- generate_mock_speciateit(n_sequences = 100)
+
+# View the first few rows
+head(speciateit_data)
+```
+
+### Customizing the Data
+
+You can customize various aspects of the generated data:
+
+```{r speciateit-custom, eval=FALSE}
+# Create a custom taxonomic distribution
+species_dist <- c(
+  "Lactobacillus crispatus" = 0.7,
+  "Gardnerella vaginalis" = 0.2,
+  "Atopobium vaginae" = 0.1
+)
+
+# Generate data with custom parameters
+custom_data <- generate_mock_speciateit(
+  n_sequences = 50,
+  seq_id_prefix = "MySeq",
+  species_distribution = species_dist,
+  confidence_range = c(0.8, 0.99),
+  decisions_range = c(10, 15),
+  include_unclassified = 0.1,
+  seed = 123
+)
+
+# Check the distribution
+table(custom_data$Classification)
+```
+
+### Writing to a File
+
+You can write the mock data to a file in the same format as SpeciateIT output:
+
+```{r speciateit-file, eval=FALSE}
+# Create a temporary file
+temp_file <- tempfile(fileext = ".txt")
+
+# Write mock data to file
+write_mock_speciateit(
+  temp_file,
+  n_sequences = 200,
+  include_unclassified = 0.05
+)
+
+# Read the file back
+file_data <- read.delim(temp_file, check.names = FALSE)
+head(file_data)
+
+# Clean up
+unlink(temp_file)
+```
+
+### Converting to FGTMicrobiome Format
+
+To use the mock data with the `add_speciateit()` function:
+
+```{r speciateit-convert, eval=FALSE}
+# Convert to format compatible with add_speciateit()
+fgt_format <- convert_speciateit_to_fgt(speciateit_data)
+
+# Examine the structure
+str(fgt_format)
+```
+
+## Generating Mock VIRGO Data
+
+VIRGO is a non-redundant gene catalog and analysis toolkit for vaginal microbiome functional profiling. The mock data generator creates gene abundance data in the VIRGO format.
+
+### Basic Usage
+
+```{r virgo-basic, eval=FALSE}
+# Generate mock data for 1000 genes and 5 samples
+virgo_data <- generate_mock_virgo(
+  n_genes = 1000,
+  n_samples = 5
+)
+
+# View the structure
+str(virgo_data)
+
+# Check sample metadata
+virgo_data$metadata
+```
+
+### Customizing the Data
+
+You can generate data with specific characteristics:
+
+```{r virgo-custom, eval=FALSE}
+# Generate data with custom parameters
+custom_virgo <- generate_mock_virgo(
+  n_genes = 500,
+  n_samples = 10,
+  sample_id_prefix = "Patient",
+  include_zeros = 0.8,  # High sparsity
+  abundance_distribution = "zipf",
+  abundance_params = c(1.2),  # Power law parameter
+  simulation_type = "realistic",
+  seed = 456
+)
+
+# Check sparsity
+mean(custom_virgo$counts == 0)
+
+# View CST distribution
+table(custom_virgo$metadata$CST)
+```
+
+### Writing Files
+
+You can write the mock data to files matching VIRGO output format:
+
+```{r virgo-file, eval=FALSE}
+# Create temporary directory
+temp_dir <- tempfile()
+dir.create(temp_dir)
+
+# Write mock data to directory
+write_mock_virgo(
+  temp_dir,
+  "mock_virgo",
+  n_genes = 200,
+  n_samples = 3
+)
+
+# List created files
+list.files(temp_dir)
+
+# Clean up
+unlink(temp_dir, recursive = TRUE)
+```
+
+### Converting to FGTMicrobiome Format
+
+To use the mock data with the `add_virgo()` function:
+
+```{r virgo-convert, eval=FALSE}
+# Convert to format compatible with add_virgo()
+fgt_virgo <- convert_virgo_to_fgt(virgo_data)
+
+# Examine the structure
+str(fgt_virgo)
+```
+
+## Generating Mock VALENCIA Data
+
+VALENCIA is a tool for classifying vaginal microbial communities into Community State Types (CSTs). The mock data generator creates CST classifications.
+
+### Basic Usage
+
+```{r valencia-basic, eval=FALSE}
+# Generate mock data for 20 samples
+valencia_data <- generate_mock_valencia(n_samples = 20)
+
+# View CST assignments
+valencia_data$cst
+```
+
+### Customizing the Data
+
+You can generate data with specific CST distributions:
+
+```{r valencia-custom, eval=FALSE}
+# Custom CST distribution
+cst_dist <- c(
+  "I" = 0.5,     # L. crispatus dominated
+  "III" = 0.3,   # L. iners dominated
+  "IV-A" = 0.2   # G. vaginalis dominated
+)
+
+# Generate data with custom parameters
+custom_valencia <- generate_mock_valencia(
+  n_samples = 30,
+  sample_id_prefix = "Subject",
+  cst_distribution = cst_dist,
+  include_scores = TRUE,
+  add_taxonomic_data = TRUE,
+  seed = 789
+)
+
+# Check CST distribution
+table(custom_valencia$cst$CST)
+
+# Check scores for a sample
+custom_valencia$scores[1, ]
+
+# Check taxonomic data
+head(custom_valencia$abundance[, 1:5])
+```
+
+### Writing Files
+
+You can write the mock data to CSV files:
+
+```{r valencia-file, eval=FALSE}
+# Create temporary directory
+temp_dir <- tempfile()
+dir.create(temp_dir)
+
+# Write mock data to directory
+write_mock_valencia(
+  temp_dir,
+  "mock_valencia",
+  n_samples = 10,
+  include_scores = TRUE,
+  add_taxonomic_data = TRUE
+)
+
+# List created files
+list.files(temp_dir)
+
+# Clean up
+unlink(temp_dir, recursive = TRUE)
+```
+
+### Converting to FGTMicrobiome Format
+
+To use the mock data with the `add_valencia()` function:
+
+```{r valencia-convert, eval=FALSE}
+# Convert to format compatible with add_valencia()
+fgt_valencia <- convert_valencia_to_fgt(valencia_data)
+
+# Examine the structure
+str(fgt_valencia)
+```
+
+## Generating a Coordinated Dataset
+
+The most powerful feature is the ability to generate a coordinated dataset for all three tools, with consistent samples and taxonomic distributions.
+
+```{r coordinated, eval=FALSE}
+# Generate a coordinated dataset
+mock_dataset <- generate_mock_fgt_dataset(
+  n_samples = 10,
+  n_sequences = 200,
+  n_genes = 500,
+  seed = 123
+)
+
+# Examine the structure
+names(mock_dataset)
+
+# View sample metadata
+mock_dataset$metadata
+
+# Check consistency (CSTs should match across tools)
+head(mock_dataset$metadata$CST)
+head(mock_dataset$valencia$raw$cst$CST)
+```
+
+### Writing to Files
+
+You can also generate all files at once:
+
+```{r coordinated-files, eval=FALSE}
+# Create temporary directory
+output_dir <- tempfile()
+dir.create(output_dir)
+
+# Generate dataset with files
+mock_data_files <- generate_mock_fgt_dataset(
+  n_samples = 5,
+  n_sequences = 100,
+  n_genes = 200,
+  create_files = TRUE,
+  output_dir = output_dir,
+  seed = 456
+)
+
+# Check directory structure
+list.dirs(output_dir)
+
+# Clean up
+unlink(output_dir, recursive = TRUE)
+```
+
+## Integration with FGTMicrobiome
+
+The mock data generators are designed to work seamlessly with the microFGT package:
+
+```{r integration, eval=FALSE}
+# Generate mock data
+mock_data <- generate_mock_fgt_dataset(
+  n_samples = 10,
+  n_sequences = 100,
+  n_genes = 200
+)
+
+# Create a basic FGTMicrobiome object
+counts <- matrix(sample(0:100, 100*10, replace=TRUE), nrow = 100, ncol = 10)
+rownames(counts) <- mock_data$speciateit$raw$`Sequence ID`[1:100]
+colnames(counts) <- mock_data$metadata$Sample
+
+taxonomy <- data.frame(
+  Feature = rownames(counts),
+  Kingdom = rep("Bacteria", 100),
+  Phylum = rep("Firmicutes", 100),
+  stringsAsFactors = FALSE
+)
+
+metadata <- data.frame(
+  Sample = mock_data$metadata$Sample,
+  Subject = paste0("Subject_", rep(1:5, each=2)),
+  row.names = mock_data$metadata$Sample,
+  stringsAsFactors = FALSE
+)
+
+# Create FGTMicrobiome object
+fgt <- FGTMicrobiome(counts, taxonomy, metadata)
+
+# Add tool results one by one
+fgt <- add_speciateit(fgt, mock_data$speciateit$fgt_compatible)
+fgt <- add_virgo(fgt, mock_data$virgo$fgt_compatible)
+fgt <- add_valencia(fgt, mock_data$valencia$fgt_compatible)
+
+# Now you have a complete FGTMicrobiome object for testing
+```
+
+## Conclusion
+
+The mock data generators provide a powerful way to create realistic test data for FGT microbiome analysis. They allow you to:
+
+1. Generate data with specific characteristics for testing
+2. Create reproducible examples for documentation
+3. Test integrations without requiring external tools
+4. Develop and validate new analysis methods
+
+For more detailed information, see the README file in the examples directory and the reference documentation for each function.

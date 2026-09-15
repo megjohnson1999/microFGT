@@ -1,0 +1,55 @@
+name: S4 Class Validation
+
+on:
+  push:
+    branches: [main, develop, rebuild-core]
+    paths:
+      - "R/**"
+      - "NAMESPACE"
+      - "DESCRIPTION"
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - "R/**"
+      - "NAMESPACE"
+      - "DESCRIPTION"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  s4-class-check:
+    name: Validate S4 Classes
+    runs-on: ubuntu-22.04
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+          use-public-rspm: true
+
+      - name: Install dependencies
+        uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          dependencies: '"all"'
+          extra-packages: |
+            any::rcmdcheck
+            any::roxygen2
+
+      - name: Install package
+        run: |
+          R CMD build .
+          PKG_FILE=$(ls -1t *.tar.gz | head -n 1)
+          R CMD INSTALL ${PKG_FILE}
+
+      - name: Check S4 class registration
+        run: |
+          Rscript -e 'source("tests/scripts/validate_s4_classes.R"); result <- validate_s4_classes(); if (!result) { quit(status = 1) }'

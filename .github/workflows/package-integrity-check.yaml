@@ -1,0 +1,92 @@
+name: Package Integrity Check
+
+on:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      should_run:
+        description: 'Whether this workflow should run'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integrity-check:
+    name: Package Integrity Check
+    runs-on: ubuntu-22.04
+    if: ${{ inputs.should_run || github.event_name == 'workflow_dispatch' }}
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      R_KEEP_PKG_SOURCE: yes
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+          use-public-rspm: true
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcurl4-openssl-dev libxml2-dev libfontconfig1-dev libharfbuzz-dev
+
+      - name: Install R dependencies
+        uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: |
+            any::remotes
+          needs: check
+
+      - name: NAMESPACE Validation
+        run: |
+          Rscript development/validate_namespace.R NAMESPACE
+
+      - name: Build package
+        run: |
+          R CMD build .
+          PKG_FILE=$(ls -1t *.tar.gz | head -n 1)
+          echo "PKG_FILE=${PKG_FILE}" >> $GITHUB_ENV
+          echo "Built package file: ${PKG_FILE}"
+
+      - name: Install package
+        run: |
+          R CMD INSTALL ${PKG_FILE}
+          echo "Installed package ${PKG_FILE}"
+
+      - name: Check Package Loading
+        run: |
+          Rscript development/check_package_loading.R microFGT
+
+      - name: Check S4 Classes
+        run: |
+          mkdir -p R/utils
+          cp development/check_s4_classes.R R/utils/
+          R CMD INSTALL .
+          Rscript -e '
+          library(methods)
+          library(microFGT)
+          source("development/check_s4_classes.R")
+          result <- check_s4_classes()
+          if (!result) {
+            cat("S4 class validation failed. See errors above.\n")
+            quit(status = 1)
+          }
+          cat("S4 class validation passed.\n")
+          '
+
+      - name: Run S4 Class Tests
+        run: |
+          Rscript -e '
+          library(testthat)
+          library(methods)
+          library(microFGT)
+          test_file("tests/testthat/test-s4-class-registration.R")
+          '

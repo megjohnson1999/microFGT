@@ -1,0 +1,115 @@
+---
+title: "Introduction to microFGT"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Introduction to microFGT}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+## Introduction
+
+The microFGT package provides specialized tools for analyzing microbiome data from the female genital tract (FGT). It is built on the TreeSummarizedExperiment data structure from Bioconductor and includes functions for data manipulation, visualization, and specialized FGT-specific analyses.
+
+```{r setup}
+library(microFGT)
+```
+
+## Basic Usage
+
+### Creating FGTExperiment Objects
+
+The core data structure in microFGT is the FGTExperiment class, which extends TreeSummarizedExperiment. You can create an FGTExperiment object from raw count data:
+
+```{r fgt-experiment}
+# Create a simple count matrix
+counts <- matrix(sample(0:100, 60, replace = TRUE), nrow = 10, ncol = 6)
+rownames(counts) <- paste0("Feature", 1:10)
+colnames(counts) <- paste0("Sample", 1:6)
+
+# Create a basic FGTExperiment
+fgt_exp <- FGTExperiment(assays = list(counts = counts))
+
+# View the object
+fgt_exp
+```
+
+### Working with Example Data
+
+microFGT includes example data for testing and demonstration:
+
+```{r example-data, eval=FALSE}
+# Load example data
+example_data <- load_example_data()
+
+# Generate synthetic data
+synthetic_data <- generate_fgt_example_data(
+  n_samples = 10,
+  n_features = 50,
+  community_types = c("CST-I", "CST-III", "CST-IV")
+)
+```
+
+### Data Transformation
+
+Transform count data to different abundance metrics:
+
+```{r data-transform}
+# Transform to relative abundance
+fgt_rel <- transform_abundance(fgt_exp, type = "relative")
+
+# Check the first few values of the relative abundance matrix
+head(assays(fgt_rel)$relative[, 1:3])
+```
+
+### Filtering Taxa
+
+Filter taxa based on prevalence and abundance:
+
+```{r filter-taxa}
+# Filter taxa
+fgt_filtered <- filter_taxa(fgt_exp, min_prevalence = 0.5, min_abundance = 0.01)
+
+# Compare dimensions before and after filtering
+dim(fgt_exp)
+dim(fgt_filtered)
+```
+
+### Visualization
+
+Create taxonomic composition plots:
+
+```{r taxa-plot, eval=FALSE}
+# Create taxonomy data
+taxonomy <- data.frame(
+  Phylum = sample(c("Firmicutes", "Bacteroidetes", "Proteobacteria"), 10, replace = TRUE),
+  Genus = sample(c("Lactobacillus", "Gardnerella", "Prevotella"), 10, replace = TRUE),
+  row.names = rownames(counts)
+)
+
+# Add taxonomy to the object
+rowData(fgt_rel) <- taxonomy
+
+# Plot taxonomic composition
+plot_taxa_composition(fgt_rel, rank = "Phylum")
+```
+
+## Next Steps
+
+This vignette provides a basic introduction to microFGT. For more detailed information, please see the package documentation and additional vignettes:
+
+- Importing data from common formats
+- Working with taxonomic data
+- Visualization techniques
+- FGT-specific analyses
+
+---
+
+**Note**: microFGT is in early development (alpha stage). APIs may change in future versions.

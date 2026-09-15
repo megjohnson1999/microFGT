@@ -1,0 +1,31 @@
+name: microfgt-ci
+
+# CI for the Python rebuild (P0 deliverable). Separate from the R package workflows.
+on:
+  push:
+    paths:
+      - "microfgt/**"
+      - "tests/python/**"
+      - "pyproject.toml"
+      - ".github/workflows/microfgt-ci.yml"
+  pull_request:
+    paths:
+      - "microfgt/**"
+      - "tests/python/**"
+      - "pyproject.toml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install (one command — the UX-first constraint, exercised in CI)
+        run: pip install -e ".[dev]"
+      - name: Importer fidelity tests (the P1 validation gate)
+        run: pytest -q

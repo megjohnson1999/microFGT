@@ -1,0 +1,16 @@
+linters: linters_with_defaults(
+    line_length_linter(120),
+    object_name_linter = NULL, # using S4 classes requires some flexibility
+    cyclocomp_linter(complexity_limit = 15),
+    commented_code_linter = NULL # Allow commented code during development
+  )
+exclusions: list(
+    "R/utils/utils-pipe.R",
+    "inst/",
+    "man/",
+    "data-raw/",
+    "vignettes/",
+    "tests/testthat/",
+    ".github/"
+  )
+encoding: "UTF-8"

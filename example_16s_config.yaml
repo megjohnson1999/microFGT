@@ -1,0 +1,49 @@
+# Example microFGT config — 16S (amplicon) arm.  Runnable against the repo fixtures:
+#   microfgt run -c example_16s_config.yaml -o /tmp/microfgt_demo.h5mu
+#
+# Copy this file, edit the paths for your data, then:
+#   microfgt check -c my_run.yaml     # verify tools/paths for your entry point
+#   microfgt run   -c my_run.yaml
+#
+# Demonstrates the turnkey path: import composition -> classify CST (centroid) ->
+# run the bought analysis -> one MuData out. (speciateIT results here are the synthetic
+# test fixture, since no genuine MC_order7_results.txt ships — see the README's IOU note.)
+#
+# Entry point = whichever inputs you provide. This example enters at existing speciateIT
+# outputs. To run the full ladder from raw reads instead (needs cutadapt + R/dada2 +
+# speciateIT installed), use:
+#
+#   composition:
+#     reads:
+#       fastq_dir: raw/                 # paired *_R1*/*_R2* (or ENA _1/_2) FASTQs
+#       region: V3V4                    # your amplicon's region; sets DADA2 + model defaults
+#       primers: { fwd: CCTACGGGNGGCWGCAG, rev: GACTACHVGGGTATCTAATCC }   # 341F/805R (V3V4)
+#       # cutadapt strips these primers, so trim_left defaults to 0 automatically — do NOT set it
+#       # (setting trim_left when primers are configured trims real sequence twice). Override
+#       # truncation only if read quality needs it:  dada2: { trunc_len: [280, 230] }
+#     speciateit:
+#       classify: /path/to/speciateIT/bin/macosx/classify   # or "classify" if it's on PATH
+#       db: /path/to/vSpeciateIT_V3V4
+#
+# Or enter at a phyloseq .rds — the standard 16S container (needs R + phyloseq). It carries
+# composition, taxonomy, and usually a CST already, so this is the "enter late" path:
+#
+#   composition:
+#     phyloseq: /path/to/ps_with_cst.rds
+#   # cst: omitted -> trust the object's own CST; set cst.method to reclassify instead.
+
+composition:
+  speciateit:
+    results: tests/python/data/speciateit_MC_order7_results.synthetic.txt
+    count_table: prototype/real_fixtures/speciateit_test_count_table.csv
+
+cst:
+  method: centroid          # classify from composition with the validated baseline
+
+analysis:
+  transforms: [relabund, clr]
+  alpha: [shannon]
+  beta: braycurtis
+  ordinate: true
+
+output: /tmp/microfgt_demo.h5mu

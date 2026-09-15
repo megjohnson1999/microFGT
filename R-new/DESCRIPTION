@@ -1,0 +1,37 @@
+Package: microFGT
+Title: Comprehensive Analysis of Female Genital Tract Microbiome Data
+Version: 0.1.0
+Authors@R:
+    person("Scott", "Handley", , "scott.handley@example.com", role = c("aut", "cre"),
+           comment = c(ORCID = "0000-0000-0000-0000"))
+Description: An integrated framework for analyzing microbiome data from the female
+    genital tract (FGT). This package unifies specialized tools within a cohesive
+    framework that handles both amplicon and metagenomic sequencing data. Built on 
+    TreeSummarizedExperiment with efficient data structures, it provides specialized
+    functionality for FGT microbiome research including taxonomic analysis and 
+    transformation functions.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+biocViews: Microbiome, Sequencing, Metagenomics, Classification, Visualization
+URL: https://github.com/shandley/microFGT
+BugReports: https://github.com/shandley/microFGT/issues
+VignetteBuilder: knitr
+Config/testthat/edition: 3
+Depends:
+    R (>= 4.2.0)
+Imports:
+    methods,
+    S4Vectors,
+    SummarizedExperiment,
+    TreeSummarizedExperiment,
+    BiocParallel,
+    stats,
+    utils
+Suggests:
+    ape,
+    BiocStyle,
+    knitr,
+    rmarkdown,
+    testthat (>= 3.0.0)

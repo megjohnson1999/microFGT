@@ -1,0 +1,56 @@
+# Simple manual test workflow for microFGT
+# This workflow can only be triggered manually
+
+name: Manual Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_type:
+        description: 'Type of test to run'
+        required: true
+        default: 'basic'
+        type: choice
+        options:
+          - basic
+          - validation
+          - full
+
+jobs:
+  manual-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Display Environment Info
+        run: |
+          echo "Running ${{ github.workflow }} on ${{ github.ref }}"
+          echo "Test type: ${{ github.event.inputs.test_type }}"
+          echo "Repository: ${{ github.repository }}"
+          echo "Runner: ${{ runner.os }}"
+          echo "Working directory:"
+          pwd
+          echo "Files in repository:"
+          find . -type f -name "*.R" | sort | head -n 20
+      
+      - name: Run Basic Validation
+        if: github.event.inputs.test_type == 'basic' || github.event.inputs.test_type == 'full'
+        run: |
+          echo "Running basic validation..."
+          echo "Checking R files:"
+          ls -la R/
+          echo "Checking workflow files:"
+          ls -la .github/workflows/
+          echo "Basic validation complete"
+      
+      - name: Validate Workflow Files
+        if: github.event.inputs.test_type == 'validation' || github.event.inputs.test_type == 'full'
+        run: |
+          echo "Validating workflow files..."
+          for file in .github/workflows/*.{yaml,yml}; do
+            if [ -f "$file" ]; then
+              echo "Checking $file"
+              cat "$file" | python3 -c "import sys, yaml; yaml.safe_load(sys.stdin)" && echo "✅ $file is valid" || echo "❌ Error in $file"
+            fi
+          done
+          echo "Workflow validation complete"

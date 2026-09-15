@@ -1,0 +1,118 @@
+name: Package Build Test
+
+on:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      should_run:
+        description: 'Whether this workflow should run'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package-build-test:
+    name: Build and Check Package
+    runs-on: ubuntu-22.04
+    if: ${{ inputs.should_run || github.event_name == 'workflow_dispatch' }}
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      R_KEEP_PKG_SOURCE: yes
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+          use-public-rspm: true
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get install -y libcurl4-openssl-dev libxml2-dev libfontconfig1-dev libharfbuzz-dev
+
+      - name: Install R dependencies
+        uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: |
+            any::rcmdcheck
+            any::roxygen2
+          needs: check
+
+      - name: Build package
+        run: |
+          R CMD build .
+          PKG_FILE=$(ls -1t *.tar.gz | head -n 1)
+          echo "PKG_FILE=${PKG_FILE}" >> $GITHUB_ENV
+          echo "Built package file: ${PKG_FILE}"
+
+      - name: Install package
+        run: |
+          R CMD INSTALL ${PKG_FILE}
+
+      - name: Test package loading
+        run: |
+          Rscript -e 'library(microFGT); cat("Package loaded successfully!\n")'
+
+      - name: Check NAMESPACE exports
+        run: |
+          Rscript -e '
+          ns_file <- system.file("NAMESPACE", package="microFGT")
+          ns_content <- readLines(ns_file)
+          exportClasses <- grep("^exportClasses", ns_content, value=TRUE)
+          exports <- grep("^export\\(", ns_content, value=TRUE)
+          cat("exportClasses entries:", length(exportClasses), "\n")
+          cat("export entries:", length(exports), "\n")
+
+          # Check critical exports
+          needed_exports <- c(
+            "FGTExperiment",
+            "experimentType",
+            "experimentType<-",
+            "fgtMetadata",
+            "fgtMetadata<-"
+          )
+
+          missing <- setdiff(needed_exports,
+                            gsub("export\\((.*)\\)", "\\1", exports))
+
+          if (length(missing) > 0) {
+            cat("WARNING: Missing exports:", paste(missing, collapse=", "), "\n")
+            quit(status = 1)
+          } else {
+            cat("All critical exports are present!\n")
+          }
+          '
+
+      - name: Run basic function tests
+        run: |
+          Rscript -e '
+          library(microFGT)
+
+          # Test class definition
+          if (methods::isClass("FGTExperiment")) {
+            cat("FGTExperiment class exists\n")
+          } else {
+            cat("ERROR: FGTExperiment class does not exist\n")
+            quit(status = 1)
+          }
+
+          # Test basic taxonomic functions
+          if (exists("is_speciateit_available")) {
+            cat("is_speciateit_available function exists\n")
+          } else {
+            cat("ERROR: is_speciateit_available function does not exist\n")
+            quit(status = 1)
+          }
+          '
+
+      - name: Run R CMD check
+        run: |
+          rcmdcheck::rcmdcheck(args = c("--no-manual", "--as-cran"), error_on = "warning", check_dir = "check")
+        shell: Rscript {0}

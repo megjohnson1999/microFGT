@@ -1,0 +1,120 @@
+name: Workflow Controls
+
+# This workflow controls which other workflows should run
+# It helps prevent multiple concurrent workflow runs
+
+on:
+  push:
+    branches: [main, develop]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'man/figures/**'
+  pull_request:
+    branches: [main, develop]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'man/figures/**'
+  workflow_dispatch:
+
+concurrency:
+  group: all-workflows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  control-workflows:
+    name: Determine workflows to run
+    runs-on: ubuntu-latest
+    outputs:
+      run_package_build: ${{ steps.check_changes.outputs.run_package_build }}
+      run_integrity_check: ${{ steps.check_changes.outputs.run_integrity_check }}
+      run_s4_class_check: ${{ steps.check_changes.outputs.run_s4_class_check }}
+      run_r_cmd_check: ${{ steps.check_changes.outputs.run_r_cmd_check }}
+      run_test_coverage: ${{ steps.check_changes.outputs.run_test_coverage }}
+    
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Check changed files
+        id: check_changes
+        run: |
+          # Get changed files
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            git fetch origin ${{ github.base_ref }} --depth=1
+            changed_files=$(git diff --name-only origin/${{ github.base_ref }} ${{ github.sha }})
+          else
+            changed_files=$(git diff --name-only HEAD^ HEAD)
+          fi
+          
+          echo "Changed files:"
+          echo "$changed_files"
+          
+          # Set default outputs
+          echo "run_package_build=false" >> $GITHUB_OUTPUT
+          echo "run_integrity_check=false" >> $GITHUB_OUTPUT
+          echo "run_s4_class_check=false" >> $GITHUB_OUTPUT
+          echo "run_r_cmd_check=false" >> $GITHUB_OUTPUT
+          echo "run_test_coverage=false" >> $GITHUB_OUTPUT
+          
+          # Check for R code changes
+          if echo "$changed_files" | grep -q -E "^R/|^NAMESPACE$|^DESCRIPTION$"; then
+            echo "R code, NAMESPACE, or DESCRIPTION changed"
+            echo "run_package_build=true" >> $GITHUB_OUTPUT
+            echo "run_integrity_check=true" >> $GITHUB_OUTPUT
+            echo "run_s4_class_check=true" >> $GITHUB_OUTPUT
+          fi
+          
+          # Check for test changes
+          if echo "$changed_files" | grep -q -E "^tests/|^R/"; then
+            echo "Test files or R code changed"
+            echo "run_r_cmd_check=true" >> $GITHUB_OUTPUT
+            echo "run_test_coverage=true" >> $GITHUB_OUTPUT
+          fi
+          
+          # If manually triggered, run all checks
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "Workflow manually triggered - running all checks"
+            echo "run_package_build=true" >> $GITHUB_OUTPUT
+            echo "run_integrity_check=true" >> $GITHUB_OUTPUT
+            echo "run_s4_class_check=true" >> $GITHUB_OUTPUT
+            echo "run_r_cmd_check=true" >> $GITHUB_OUTPUT
+            echo "run_test_coverage=true" >> $GITHUB_OUTPUT
+          fi
+          
+      - name: Summarize workflows to run
+        run: |
+          echo "Workflows to run:"
+          echo "Package Build: ${{ steps.check_changes.outputs.run_package_build }}"
+          echo "Integrity Check: ${{ steps.check_changes.outputs.run_integrity_check }}"
+          echo "S4 Class Check: ${{ steps.check_changes.outputs.run_s4_class_check }}"
+          echo "R CMD Check: ${{ steps.check_changes.outputs.run_r_cmd_check }}"
+          echo "Test Coverage: ${{ steps.check_changes.outputs.run_test_coverage }}"
+
+  # Call the individual workflows based on control-workflows job outputs
+  package-build:
+    needs: control-workflows
+    if: ${{ needs.control-workflows.outputs.run_package_build == 'true' }}
+    uses: ./.github/workflows/package-build.yaml
+    with:
+      should_run: true
+    secrets: inherit
+
+  integrity-check:
+    needs: control-workflows
+    if: ${{ needs.control-workflows.outputs.run_integrity_check == 'true' }}
+    uses: ./.github/workflows/package-integrity-check.yaml
+    with:
+      should_run: true
+    secrets: inherit
+
+  s4-class-check:
+    needs: control-workflows
+    if: ${{ needs.control-workflows.outputs.run_s4_class_check == 'true' }}
+    uses: ./.github/workflows/s4-class-check.yaml
+    with:
+      should_run: true
+    secrets: inherit

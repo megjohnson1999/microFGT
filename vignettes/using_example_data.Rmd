@@ -1,0 +1,259 @@
+---
+title: "Generating and Using Example Data"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Generating and Using Example Data}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 5
+)
+```
+
+## Introduction
+
+This vignette demonstrates how to generate and use example data with the microFGT package. The example data generation functions allow you to create realistic datasets that mimic female genital tract (FGT) microbiome profiles, including different community state types (CSTs) and appropriate clinical metadata.
+
+## Basic Usage
+
+First, let's load the necessary packages:
+
+```{r setup, eval=FALSE}
+library(microFGT)
+library(SummarizedExperiment)
+library(TreeSummarizedExperiment)
+```
+
+### Generating a Simple Dataset
+
+The `generate_fgt_example_data()` function is the main entry point for creating example data. It generates a count matrix, taxonomy, and metadata that reflect realistic FGT microbiome profiles.
+
+```{r basic-example, eval=FALSE}
+# Generate a simple example dataset
+example_data <- generate_fgt_example_data(
+  n_samples = 10,
+  n_features = 50,
+  sample_groups = c("Healthy", "BV"),
+  group_proportions = c(0.7, 0.3),
+  community_types = c("CST-I", "CST-III", "CST-IV"),
+  format = "list"
+)
+```
+
+This creates a list containing:
+
+- `counts`: A count matrix with 50 features (rows) and 10 samples (columns)
+- `taxonomy`: A data frame with taxonomic classifications for each feature
+- `metadata`: A data frame with clinical and technical metadata for each sample
+
+### Examining the Generated Data
+
+Let's look at the structure of the generated data:
+
+```{r examine-data, eval=FALSE}
+# Examine count matrix dimensions
+dim(example_data$counts)
+
+# Look at first few rows and columns of counts
+example_data$counts[1:5, 1:3]
+
+# Check taxonomic classifications
+head(example_data$taxonomy)
+
+# Review sample metadata
+head(example_data$metadata)
+```
+
+### Creating an FGTExperiment Object
+
+You can directly generate an FGTExperiment object by setting the `format` parameter:
+
+```{r fgt-experiment, eval=FALSE}
+# Generate an FGTExperiment object
+fgt_exp <- generate_fgt_example_data(
+  n_samples = 10,
+  n_features = 50,
+  sample_groups = c("Healthy", "BV"),
+  group_proportions = c(0.7, 0.3),
+  community_types = c("CST-I", "CST-III", "CST-IV"),
+  format = "FGTExperiment"
+)
+
+# Print basic information about the object
+fgt_exp
+```
+
+## Customizing Example Data
+
+### Different Community State Types
+
+The example data generator supports the five major community state types found in the FGT:
+
+- **CST-I**: Dominated by *Lactobacillus crispatus*
+- **CST-II**: Dominated by *Lactobacillus gasseri*
+- **CST-III**: Dominated by *Lactobacillus iners*
+- **CST-IV**: Diverse anaerobic bacteria (associated with BV)
+- **CST-V**: Dominated by *Lactobacillus jensenii*
+
+You can specify which CSTs to include:
+
+```{r cst-customization, eval=FALSE}
+# Generate data with specific CSTs
+data_cst_i_iv <- generate_fgt_example_data(
+  n_samples = 10,
+  community_types = c("CST-I", "CST-IV"),
+  format = "list"
+)
+```
+
+### Different Sample Groups and Proportions
+
+You can specify the sample groups and their proportions:
+
+```{r sample-groups, eval=FALSE}
+# Generate data with three groups
+data_three_groups <- generate_fgt_example_data(
+  n_samples = 30,
+  sample_groups = c("Healthy", "BV", "Intermediate"),
+  group_proportions = c(0.5, 0.3, 0.2),
+  format = "list"
+)
+```
+
+### Sequencing Depth and Feature Count
+
+Control the sequencing depth and number of features:
+
+```{r seq-depth, eval=FALSE}
+# Generate data with higher sequencing depth and more features
+deep_data <- generate_fgt_example_data(
+  n_samples = 20,
+  n_features = 200,
+  sequencing_depth = c(50000, 100000),
+  format = "list"
+)
+```
+
+### Including a Phylogenetic Tree
+
+You can generate a phylogenetic tree that reflects the taxonomic relationships:
+
+```{r phylo-tree, eval=FALSE}
+# Generate data with a phylogenetic tree
+data_with_tree <- generate_fgt_example_data(
+  n_samples = 20,
+  include_tree = TRUE,
+  format = "list"
+)
+
+# Check if tree was generated
+if (!is.null(data_with_tree$tree)) {
+  # Requires ape package
+  library(ape)
+  # Plot the tree
+  plot(data_with_tree$tree, cex = 0.6)
+}
+```
+
+## Saving and Loading Example Data
+
+### Saving Generated Data
+
+You can save the generated data to files:
+
+```{r save-data, eval=FALSE}
+# Generate a dataset
+example_data <- generate_fgt_example_data(
+  n_samples = 10,
+  n_features = 50,
+  format = "list"
+)
+
+# Save to temporary directory
+output_dir <- tempdir()
+files <- save_example_data(
+  seq_tab = example_data$counts,
+  taxonomy = example_data$taxonomy,
+  metadata = example_data$metadata,
+  tree = example_data$tree,
+  output_dir = output_dir,
+  base_name = "my_example"
+)
+
+# Show the saved files
+files
+```
+
+### Loading Pre-Built Examples
+
+The package includes functions to load pre-built example datasets:
+
+```{r load-examples, eval=FALSE}
+# Load a small amplicon dataset
+small_data <- load_example_data(
+  size = "small",
+  type = "amplicon",
+  as_fgt_experiment = FALSE
+)
+
+# Load a medium dataset as an FGTExperiment object
+medium_fgt <- load_example_data(
+  size = "medium",
+  type = "amplicon",
+  as_fgt_experiment = TRUE
+)
+```
+
+## Using Example Data for Analysis
+
+Once you have generated or loaded example data, you can use it with all the microFGT analysis functions. Here are a few examples:
+
+### Transforming Abundance
+
+```{r transform, eval=FALSE}
+# Generate an FGTExperiment object
+fgt_exp <- generate_fgt_example_data(
+  n_samples = 10,
+  n_features = 50,
+  format = "FGTExperiment"
+)
+
+# Transform to relative abundance
+fgt_rel <- transform_abundance(fgt_exp, type = "relative", assay_name = "counts")
+
+# Check the transformed data
+head(assays(fgt_rel)$relative[, 1:3])
+```
+
+### Aggregating by Taxonomic Rank
+
+```{r aggregate, eval=FALSE}
+# Aggregate to phylum level
+fgt_phylum <- aggregate_taxa(fgt_exp, rank = "Phylum", assay_name = "counts")
+
+# Check the aggregated data
+rownames(fgt_phylum)
+head(assays(fgt_phylum)$counts[, 1:3])
+```
+
+### Visualizing Taxonomic Composition
+
+```{r visualize, eval=FALSE}
+# First transform to relative abundance
+fgt_rel <- transform_abundance(fgt_exp, type = "relative", assay_name = "counts")
+
+# Plot taxonomic composition
+plot_taxa_composition(fgt_rel, rank = "Phylum", top_n = 5)
+```
+
+## Conclusion
+
+The example data generation functions provide a convenient way to test microFGT functionality, develop new methods, and create educational materials. The generated data mimics real FGT microbiome profiles, allowing you to explore the package's capabilities without needing real sequencing data.
+
+For more information, please see the documentation for the individual functions and the examples in the package.

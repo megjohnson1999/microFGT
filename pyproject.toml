@@ -1,0 +1,48 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "microfgt"
+version = "0.0.1"
+description = "A flexible, one-stop tool for female genital tract (FGT) microbiome analysis"
+readme = "microfgt/README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "microFGT contributors" }]
+keywords = ["microbiome", "FGT", "vaginal", "VALENCIA", "VIRGO", "speciateIT", "CST"]
+
+# Core dependencies are deliberately minimal — the integrated object is just the
+# container (mudata, layer 1). The multi-omics analysis FRAMEWORK (muon vs.
+# scikit-bio-style tooling) is an OPEN pick deferred to the analysis layer (P4);
+# bare-mudata objects are read natively by either, so there is no lock-in.
+dependencies = [
+    # 0.4 removed `set_options` and makes `pull_on_update=False` the default; build_mudata
+    # relies on that guard, so cap at <0.4 until the 0.4 migration is done deliberately.
+    "mudata>=0.3,<0.4",
+    "anndata>=0.9",
+    "pandas>=1.5",
+    "numpy>=1.23",
+    # Analysis framework (P4 decision): commodity stats bought from scikit-bio,
+    # operating on a mudata-native container (no framework lock-in). PyYAML drives the
+    # config-first CLI.
+    "scikit-bio>=0.6",
+    "statsmodels>=0.14",   # (mixed) linear models for the hypothesis-test verbs
+    "pyyaml>=6",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0", "matplotlib>=3.6"]
+viz = ["matplotlib>=3.6"]
+app = ["streamlit>=1.30", "matplotlib>=3.6"]   # Layer 3 dashboard (microfgt dashboard)
+
+[project.scripts]
+microfgt = "microfgt.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["microfgt"]
+
+[tool.pytest.ini_options]
+# Python tests live under tests/python so they never collide with the R
+# package's tests/testthat tree (this repo is mid-refactor R -> Python).
+testpaths = ["tests/python"]

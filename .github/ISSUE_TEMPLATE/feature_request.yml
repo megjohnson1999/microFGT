@@ -1,0 +1,47 @@
+name: Feature Request
+description: Suggest a new feature or enhancement
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to suggest a new feature\!
+  - type: textarea
+    id: feature-description
+    attributes:
+      label: Feature Description
+      description: Describe the feature you would like to see added
+      placeholder: Describe the feature and its benefits
+    validations:
+      required: true
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use Case
+      description: Describe a specific use case for this feature
+      placeholder: How would this feature be used in a real analysis scenario?
+    validations:
+      required: true
+  - type: textarea
+    id: proposed-implementation
+    attributes:
+      label: Proposed Implementation
+      description: If you have ideas on how this could be implemented, share them here
+      placeholder: Suggestions for implementation approach or API design
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      description: Would you be willing to contribute this feature?
+      options:
+        - label: I am willing to implement this feature
+          required: false
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Code of Conduct
+      description: By submitting this issue, you agree to follow our Code of Conduct
+      options:
+        - label: I agree to follow the project Code of Conduct
+          required: true

@@ -1,0 +1,20 @@
+# Dependency review workflow for microFGT
+# Scans for dependency vulnerability issues and updates
+
+name: Dependency Review
+
+on:
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  dependency-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+      
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v3
+        with:
+          fail-on-severity: high

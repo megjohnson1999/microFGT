@@ -1,0 +1,31 @@
+# Example microFGT config — metagenomics (shotgun) arm.
+#
+# Hand over raw shotgun reads and microFGT RUNS the whole pipeline for you:
+#   fastp QC -> minimap2 host removal -> VIRGO2 (map + compile) -> VISTA/mgCST -> one MuData.
+# No running the tools by hand.
+#
+# Copy this file, edit the paths, then ALWAYS check first — it verifies every tool + DB path
+# and tells you exactly what's missing before anything runs (hours of mapping):
+#   microfgt check -c my_run.yaml
+#   microfgt run   -c my_run.yaml
+#
+# This is a real-data template (not runnable against the repo fixtures): it needs the external
+# tools + reference DBs installed. Replace every /path/to/... below with your own paths.
+
+metagenomics:
+  reads:
+    fastq_dir: raw_shotgun/            # paired *_R1*/*_R2* FASTQs — runs the full tool chain
+  # compiled: VIRGO2_Compiled.summary.NR.txt   # OR enter here to skip QC/host/map/compile
+
+  host_ref:   /path/to/GRCh38.fna.gz    # host genome for read removal
+  virgo2_dir: /path/to/VIRGO2           # has VIRGO2.py, Index/, AnnotationTables/
+  vista_repo: /path/to/VISTA            # contains VISTA_data/
+  threads: 8
+  # virgo2_sha256: <hex>   # optional: pin the Zenodo VIRGO2.py checksum so `check` catches the
+  #                        # (silent, un-debuggable) GitHub-vs-Zenodo version divergence
+
+mgcst:
+  # Leave this out to RUN VISTA (the default). Set it to import an existing VISTA call instead:
+  # vista_output: mgCSTs_x.csv
+
+output: /tmp/microfgt_shotgun_demo.h5mu

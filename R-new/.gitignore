@@ -1,0 +1,13 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+.Rbuildignore
+inst/doc
+docs/
+*.o
+*.so
+*.dll
+NAMESPACE
+/doc/
+/Meta/
