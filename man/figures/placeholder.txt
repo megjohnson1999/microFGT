@@ -1,3 +1,0 @@
-This is a placeholder for the workflow diagram.
-A real workflow diagram would need to be created using DiagrammeR, ggplot2, or another visualization tool.
-For now, we'll just leave this text file as a reminder.

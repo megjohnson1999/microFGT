@@ -1,58 +1,27 @@
 **/.claude/settings.local.json
 
-# R specific
-.Rproj.user
-.Rhistory
-.RData
-.Ruserdata
-.Rapp.history
-.Renviron
-.Rprofile
-..Rcheck/
-*.Rcheck/
-src/*.o
-src/*.so
-src/*.dll
-src/symbols.rds
-R/RcppExports.R
-src/RcppExports.cpp
-vignettes/*.R
-vignettes/.build.timestamp
-inst/doc
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+build/
+dist/
 
-# Build artifacts
-*.o
-*.so
-*.dll
-*.a
-*.Rout
-**/*_cache/
-**/*_files/
-
-# Mac specific
+# OS / editor
 .DS_Store
 .AppleDouble
 .LSOverride
-Icon
 ._*
-.Spotlight-V100
-.Trashes
-
-# Editor specific
 .idea/
 .vscode/
-*.vim
 *.swp
 *.swo
 *~
-
-# Package specific
-inst/doc/
-doc/
-docs/
-Meta/
-/revdep/
-/check/
 
 # Temporary files
 temp/
@@ -61,68 +30,6 @@ tmp/
 *.log
 *.tmp
 *.bak
-verify-installation.R
-debug_transform.R
-/test_*.R
-/*_test.R
-/test-*.R
-final_test.R
-final_verification.R
-direct_test_fix.R
-direct_transform_fix.R
-simple_test.R
-manual-export.R
-
-# Keep proper test files in tests/testthat/ directory
-!tests/testthat/test_*.R
-!tests/testthat/test-*.R
-
-# Test artifacts
-tests/testthat/Rplots.pdf
-tests/testthat/legacy_tests/
-
-# Documentation generated files
-vignettes/*.html
-vignettes/*.pdf
-vignettes/*.R
-
-# Backup files
-*.backup
-backup/
-*_backup_*
-R-rebuild/
-R/legacy_code/
-
-# Compiled package
-microFGT_*.tar.gz
-
-# Generated data
-data-raw/private/
-
-# Rebuild documentation files
-CLEANUP_PLAN.md
-CLEANUP_PROGRESS.md
-CONSOLIDATION_SUMMARY.md
-CURRENT_STATUS.md
-FUNCTION_INVENTORY.md
-INTEGRATION_FUNCTIONS_FIXES.md
-TRANSFORM_COUNTS_CHANGES.md
-TRANSFORM_COUNTS_TEST_UPDATES.md
-planning/rebuild_summary.md
-
-# Backup files from integration process
-R/core/backup/
-**/legacy_code/
-*.bak
-
-# Python (microfgt rebuild)
-.venv/
-__pycache__/
-*.py[cod]
-*.egg-info/
-.pytest_cache/
-build/
-dist/
 
 # Local validation data (large VALENCIA published dataset; not committed)
 .validation_data/

@@ -10,12 +10,10 @@ analysis**. It runs the standard FGT tools (speciateIT, VALENCIA, VIRGO) or reim
 their concepts, and lets method choices across the whole workflow be explored — vs. the
 existing tools, which are rigid, hard to install, and frustrating to use.
 
-> ⚠️ **This is an experimental branch (`design/fgt-workflow-map`): a ground-up Python
-> rebuild of microFGT.** It is **not** the R package on `main`. The original R/S4 package
-> (`R/`, `R-new/`, the `FGTExperiment` class, the `TESTING_*`/`INTEGRATION_*` docs) is being
-> retired and replaced by the Python tool under [`microfgt/`](microfgt/). If you want the
-> previous R package, switch to the `main` branch. The design reasoning behind the rebuild
-> is in [`design/`](design/).
+> **This is the Python rebuild of microFGT** — a ground-up reimplementation under
+> [`microfgt/`](microfgt/) that supersedes an earlier R/S4 package (the `FGTExperiment`
+> class and its tooling), now retired. The design reasoning behind the rebuild is in
+> [`design/`](design/).
 
 ## What it is
 
