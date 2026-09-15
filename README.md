@@ -39,7 +39,7 @@ arm, the **speciateIT binary + a vSpeciateDB model** (`microfgt setup` owns this
 
 ```bash
 # 0. Get the code.
-git clone https://github.com/shandley/microFGT.git
+git clone https://github.com/megjohnson1999/microFGT.git
 cd microFGT
 
 # 1. Environment — lean 16S-only env (cutadapt + DADA2), then the package.
@@ -125,5 +125,5 @@ If you use microFGT in your research, please cite:
 
 ```
 Handley, S. (2023-2025). microFGT: Comprehensive Analysis of Female Genital Tract
-Microbiome Data. GitHub repository, https://github.com/shandley/microFGT
+Microbiome Data. GitHub repository, https://github.com/megjohnson1999/microFGT
 ```
