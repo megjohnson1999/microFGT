@@ -151,7 +151,7 @@ def import_phyloseq(
         tax = pd.read_csv(out / "tax_table.csv", index_col=0)       # ASV id -> ranks
         sdata = pd.read_csv(out / "sample_data.csv", index_col=0)   # sample -> variables
 
-    counts.index = counts.index.astype(str)
+    counts.index = counts.index.astype(str).str.strip()   # sample ids; strip stray whitespace
     asvs = [str(c) for c in counts.columns]
     taxa.index = taxa.index.astype(str)
     tax.index = tax.index.astype(str)
@@ -169,7 +169,7 @@ def import_phyloseq(
     )
 
     obs = sdata.copy()
-    obs.index = obs.index.astype(str)
+    obs.index = obs.index.astype(str).str.strip()
     obs = obs.reindex(counts.index)
     obs.index.name = "sample"
     counts_i = _as_int_counts(counts.to_numpy(), f"phyloseq otu_table ({rds_path})")

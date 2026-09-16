@@ -43,7 +43,7 @@ def import_valencia(csv_path, sample_col: str = "sampleID") -> pd.DataFrame:
             f"Sample column {sample_col!r} not found in {csv_path}. "
             f"Columns start with: {list(d.columns[:5])}..."
         )
-    out = pd.DataFrame(index=pd.Index(d[sample_col].astype(str), name="sample"))
+    out = pd.DataFrame(index=pd.Index(d[sample_col].astype(str).str.strip(), name="sample"))
     for col in _LABEL_COLS:
         out[col] = d[col].to_numpy() if col in d.columns else np.nan
     return out

@@ -154,7 +154,7 @@ def import_virgo2(summary, *, taxon_annotation=None, annotations=None) -> ad.Ann
     summary = Path(summary)
     wide = pd.read_csv(summary, sep="\t", index_col=0)  # genes x samples
     wide.index = wide.index.astype(str)
-    wide.columns = [str(c) for c in wide.columns]
+    wide.columns = [str(c).strip() for c in wide.columns]   # sample ids; strip stray whitespace
     if wide.empty:
         raise ValueError(f"{summary} parsed to an empty matrix; expected 'Gene\\t<sample>…'.")
 
