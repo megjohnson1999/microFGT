@@ -36,7 +36,7 @@ import anndata as ad
 import numpy as np
 import pandas as pd
 
-from microfgt.io.speciateit import _genus_of
+from microfgt.io.speciateit import _as_int_counts, _genus_of
 
 _LABEL_COLS = ("CST", "subCST", "score")
 _MISSING = {"", "NA", "nan", "None", "<NA>"}
@@ -172,7 +172,11 @@ def import_phyloseq(
     obs.index = obs.index.astype(str)
     obs = obs.reindex(counts.index)
     obs.index.name = "sample"
-    counts_i = counts.to_numpy().astype(np.int64)
+    counts_i = _as_int_counts(counts.to_numpy(), f"phyloseq otu_table ({rds_path})")
+    # A sample_data column literally named read_count would make insert() raise; our per-sample
+    # total is authoritative, so drop any existing one and put ours first.
+    if "read_count" in obs.columns:
+        obs = obs.drop(columns=["read_count"])
     obs.insert(0, "read_count", counts_i.sum(axis=1))
 
     adata = ad.AnnData(X=counts_i.astype(np.float32), obs=obs, var=var)

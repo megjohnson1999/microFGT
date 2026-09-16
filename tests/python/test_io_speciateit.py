@@ -241,3 +241,26 @@ def test_zero_id_overlap_with_count_table_raises(tmp_path):
     ct.write_text("sampleID,X1,X2\nS1,5,3\nS2,2,8\n")   # count-table ASV ids don't match results
     with pytest.raises(ValueError, match="None of the .* ASVs"):
         import_speciateit(results, ct)
+
+
+def _results(tmp_path):
+    p = tmp_path / "r.txt"
+    p.write_text("ASV1\tLactobacillus_iners\t0.97\t50\nASV2\tGardnerella_vaginalis\t0.98\t50\n")
+    return p
+
+
+def test_fractional_count_table_raises(tmp_path):
+    """Relative abundances / normalized values must fail loudly, not be floored to zeros."""
+    ct = tmp_path / "ct.csv"
+    ct.write_text("sampleID,ASV1,ASV2\nS1,0.03,0.97\nS2,0.5,0.5\n")
+    with pytest.raises(ValueError, match="non-integer"):
+        import_speciateit(_results(tmp_path), ct)
+
+
+def test_float_whole_number_counts_accepted(tmp_path):
+    """A count table stored as whole-number floats (100.0) is still valid."""
+    ct = tmp_path / "ct.csv"
+    ct.write_text("sampleID,ASV1,ASV2\nS1,100.0,3.0\nS2,2.0,8.0\n")
+    adata = import_speciateit(_results(tmp_path), ct)
+    assert adata.layers["counts"].dtype.kind in "iu"
+    assert int(adata.layers["counts"].sum()) == 113
