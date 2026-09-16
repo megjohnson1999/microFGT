@@ -19,6 +19,7 @@ cross-modality integration needs a real co-assayed dataset (an open question in 
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 
 import anndata as ad
@@ -48,6 +49,20 @@ class Reconciliation:
         if self.per_modality:
             s += f"; CST matched {self.cst_matched}, unmatched {len(self.cst_unmatched)}"
         return s
+
+
+# The 16S and shotgun "arms" — the two sample sets whose overlap the cross-arm join depends on.
+# (composition_taxon is a roll-up of composition, so it carries 16S's samples; likewise
+# composition_taxon_shotgun rolls up function, so it carries the shotgun samples.)
+_S16_MODS = ("composition", "composition_taxon")
+_SHOTGUN_MODS = ("function", "composition_taxon_shotgun")
+
+
+def _arm_sample_sets(mods: dict) -> tuple[set, set]:
+    """The 16S and shotgun sample-id sets present in ``mods`` (either may be empty)."""
+    s16 = {str(s) for k in _S16_MODS if k in mods for s in mods[k].obs_names}
+    shotgun = {str(s) for k in _SHOTGUN_MODS if k in mods for s in mods[k].obs_names}
+    return s16, shotgun
 
 
 def attach_cst_annotations(mdata: md.MuData, cst: pd.DataFrame) -> None:
@@ -218,4 +233,24 @@ def build_mudata(
     )
     mdata.uns["reconciliation_summary"] = recon.summary()
     mdata.uns["reconciliation"] = recon.__dict__
+
+    # Cross-arm guard: when BOTH the 16S and shotgun arms are present, the whole point is that
+    # they integrate by shared sample id. If they share NONE, nothing actually joined across
+    # arms (every sample sits in only one) — almost always a sample-naming mismatch, not a real
+    # result. Record the overlap, and in the zero case say so loudly instead of returning a
+    # silent non-join.
+    s16, shotgun = _arm_sample_sets(mods)
+    if s16 and shotgun:
+        overlap = len(s16 & shotgun)
+        mdata.uns["cross_arm_overlap"] = {
+            "n_16s": len(s16), "n_shotgun": len(shotgun), "n_shared": overlap,
+        }
+        if overlap == 0:
+            warnings.warn(
+                f"The 16S ({len(s16)} samples) and shotgun ({len(shotgun)} samples) assays "
+                "share NO sample ids — nothing was integrated across arms (every sample is in "
+                "only one arm). This is almost always a sample-naming mismatch; give the two "
+                "arms matching sample ids so they can be joined.",
+                stacklevel=2,
+            )
     return mdata
