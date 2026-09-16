@@ -42,6 +42,16 @@ if (length(fnFs) > 0) {
   sample.names <- sub("_1\\.(fastq|fq)(\\.gz)?$", "", basename(fnFs))
 }
 
+# Guard the pairing: fnFs/fnRs are matched by sort-order + position, so an unequal count means
+# some sample is missing a mate and every downstream pair would be misaligned (sample K's
+# forward reads denoised against sample K+1's reverse). Fail loudly instead.
+if (length(fnFs) == 0) stop(sprintf("no paired FASTQs found in %s", input_dir))
+if (length(fnFs) != length(fnRs)) {
+  stop(sprintf(paste0("found %d R1 files but %d R2 files in %s — unpaired reads. Each sample ",
+                      "needs both a forward and reverse FASTQ."),
+               length(fnFs), length(fnRs), input_dir))
+}
+
 # Per-position quality profile (so truncation can be set from data, not guessed).
 qp <- do.call(rbind, lapply(fnFs, function(f) {
   qa <- qa(f)[["perCycle"]]$quality
@@ -53,6 +63,20 @@ filtFs <- file.path(input_dir, "filtered", paste0(sample.names, "_R1_filt.fastq.
 filtRs <- file.path(input_dir, "filtered", paste0(sample.names, "_R2_filt.fastq.gz"))
 filterAndTrim(fnFs, filtFs, fnRs, filtRs, truncLen = truncLen, trimLeft = trimLeft,
               maxEE = c(2, 2), rm.phix = TRUE, multithread = TRUE)
+
+# filterAndTrim writes NO output file for a sample whose reads ALL fail the filter (common on
+# low-biomass / host-heavy FGT samples). learnErrors/dada would then error on the missing paths
+# and kill the whole batch over a few weak samples. Keep only samples whose filtered files
+# exist, so the run survives; a fully-empty run still stops with a clear message.
+kept <- file.exists(filtFs) & file.exists(filtRs)
+if (!any(kept)) {
+  stop("no samples had reads pass the DADA2 filter — check truncLen/trimLeft/quality for this run.")
+}
+if (!all(kept)) {
+  message(sprintf("DADA2: dropped %d of %d samples with zero reads passing the filter: %s",
+                  sum(!kept), length(kept), paste(sample.names[!kept], collapse = ", ")))
+}
+filtFs <- filtFs[kept]; filtRs <- filtRs[kept]; sample.names <- sample.names[kept]
 
 errF <- learnErrors(filtFs, multithread = TRUE)
 errR <- learnErrors(filtRs, multithread = TRUE)
