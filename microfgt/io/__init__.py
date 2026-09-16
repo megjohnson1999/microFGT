@@ -8,6 +8,11 @@ NOT guessed.
 
 from microfgt.io.integrate import build_mudata
 from microfgt.io.phyloseq import existing_cst, import_phyloseq
+from microfgt.io.samplesheet import (
+    SampleSheetReport,
+    read_samplesheet,
+    validate_samplesheet,
+)
 from microfgt.io.speciateit import collapse_to_taxon, import_speciateit
 from microfgt.io.valencia import import_valencia
 from microfgt.io.virgo import (
@@ -19,6 +24,7 @@ from microfgt.io.virgo import (
 from microfgt.io.vista import import_mgcst
 
 __all__ = [
+    "SampleSheetReport",
     "build_mudata",
     "collapse_to_taxon",
     "collapse_virgo2_to_taxon",
@@ -30,4 +36,6 @@ __all__ = [
     "import_virgo",
     "import_virgo2",
     "import_virgo2_taxonomy",
+    "read_samplesheet",
+    "validate_samplesheet",
 ]

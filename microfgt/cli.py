@@ -34,6 +34,15 @@ def build_parser() -> argparse.ArgumentParser:
     chk.add_argument("-c", "--config", required=True)
     chk.set_defaults(_run=_cmd_check)
 
+    ssc = sub.add_parser(
+        "check-samplesheet",
+        help="Validate a sample sheet (unique ids, files exist, arm overlap).",
+    )
+    ssc.add_argument("-s", "--samplesheet", required=True, help="Sample-sheet CSV.")
+    ssc.add_argument("--base-dir", help="Resolve relative file paths against this directory "
+                     "(default: the sample sheet's own directory).")
+    ssc.set_defaults(_run=_cmd_check_samplesheet)
+
     setup = sub.add_parser(
         "setup", help="Install the 16S prerequisites conda can't (speciateIT + a vSpeciateDB model)."
     )
@@ -148,6 +157,24 @@ def _cmd_check(args: argparse.Namespace) -> None:
             print(hint)
         raise SystemExit(f"{len(missing)} prerequisite(s) missing — see above.")
     print("all prerequisites satisfied.")
+
+
+def _cmd_check_samplesheet(args: argparse.Namespace) -> None:
+    from pathlib import Path
+
+    from microfgt.io import read_samplesheet, validate_samplesheet
+
+    df = read_samplesheet(args.samplesheet)
+    base = args.base_dir or Path(args.samplesheet).parent
+    rpt = validate_samplesheet(df, base_dir=base)
+    print(rpt.summary())
+    for w in rpt.warnings:
+        print(f"warning: {w}")
+    for p in rpt.problems:
+        print(f"problem: {p}")
+    if not rpt.ok:
+        raise SystemExit(f"{len(rpt.problems)} problem(s) in the sample sheet — see above.")
+    print("sample sheet OK.")
 
 
 # The 16S tools conda provides — if these are the ones missing, the env is likely just not active.
