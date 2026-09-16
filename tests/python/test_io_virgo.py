@@ -6,6 +6,16 @@ import pandas as pd
 from microfgt.io import import_virgo
 
 
+def test_genus_keeps_candidatus_and_polyphyly_prefixes():
+    """VIRGO2 genus uses the SAME rule as the 16S side (rsplit off the epithet), so Candidatus
+    prefixes survive instead of collapsing to the old split('_')[0] bug's 'Ca'."""
+    from microfgt.io.virgo import _genus_of
+
+    assert _genus_of("Lactobacillus_iners") == "Lactobacillus"
+    assert _genus_of("Gardnerella_vaginalis") == "Gardnerella"
+    assert _genus_of("Ca_Lachnocurva_vaginae") == "Ca_Lachnocurva"   # not "Ca"
+
+
 def test_virgo_stacks_real_per_sample_files(real_fixtures, tmp_path):
     # FORMATS.md: one <sample>.out per sample. Stage the two genuine files in a dir.
     for name in ("virgo_sub1.out", "virgo_sub2.out"):
