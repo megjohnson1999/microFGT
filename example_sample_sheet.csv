@@ -1,0 +1,4 @@
+sample_id,16s_R1,16s_R2,shotgun_R1,shotgun_R2,group,timepoint
+PT01,16s/PT01_R1.fastq.gz,16s/PT01_R2.fastq.gz,shotgun/PT01_R1.fastq.gz,shotgun/PT01_R2.fastq.gz,BV,1
+PT02,16s/PT02_R1.fastq.gz,16s/PT02_R2.fastq.gz,,,Normal,1
+PT03,,,shotgun/PT03_R1.fastq.gz,shotgun/PT03_R2.fastq.gz,BV,1

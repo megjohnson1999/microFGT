@@ -78,6 +78,46 @@ with actionable messages, instead of failing deep in a run. Copy-and-run example
 one per mode, are at the repo root: `example_16s_config.yaml` (runnable against the repo
 fixtures), `example_metagenomics_config.yaml`, and `example_combined_config.yaml`.
 
+### Sample sheet (how you name samples and combine arms)
+
+microFGT does **not** guess a sample's id from its FASTQ filename, and it never tries to
+auto-match your 16S and shotgun files — a wrong guess would silently pair the wrong patients.
+Instead you hand it a small CSV that says, per sample, its id and where its reads live:
+
+```csv
+sample_id,16s_R1,16s_R2,shotgun_R1,shotgun_R2,group
+PT01,16s/PT01_R1.fastq.gz,16s/PT01_R2.fastq.gz,mgx/PT01_R1.fastq.gz,mgx/PT01_R2.fastq.gz,BV
+PT02,16s/PT02_R1.fastq.gz,16s/PT02_R2.fastq.gz,,,Normal
+```
+
+- `sample_id` is required and unique — it's the key that ties a sample's 16S and shotgun reads
+  together, so **give the same sample the same id in both arms**. That declared id is what
+  flows through the whole run, so the arms integrate correctly regardless of how the raw
+  filenames were named.
+- Read columns are optional; leave a cell blank for an arm a sample doesn't have. `_R2` is
+  optional (single-end reads use only `_R1`).
+- Any extra columns (e.g. `group`) are carried onto the object as per-sample `.obs` metadata.
+
+Point a config at it with a top-level `samples:` key — per-run settings (region, primers, DB
+paths) still live in the config; the sheet only supplies the per-sample files and metadata:
+
+```yaml
+samples: sample_sheet.csv
+composition:
+  reads: { region: V3V4, primers: { fwd: ..., rev: ... } }
+  speciateit: { db: /path/to/vSpeciateIT_V3V4 }
+```
+
+Validate a sheet before a run — it checks that ids are unique and every listed file exists, and
+reports how the arms overlap:
+
+```bash
+microfgt check-samplesheet -s sample_sheet.csv
+```
+
+See `example_sample_sheet.csv` at the repo root. (Sample-sheet runs currently use the local
+executor; the Snakemake path is a follow-up.)
+
 ### Python API (for power users)
 
 ```python
