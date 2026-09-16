@@ -124,6 +124,53 @@ def test_full_fastq_to_h5mu_ladder(tmp_path):
     assert len(runs["primer_trim"]) == 2
 
 
+def test_full_ladder_from_samplesheet(tmp_path):
+    """A run driven by `samples:` — messy source filenames, canonical ids in the sheet — comes
+    out keyed by the sheet's sample_ids with the sheet's metadata attached to .obs."""
+    from microfgt.cli import main
+
+    # Deliberately messy, non-canonical source names for two samples.
+    raw = tmp_path / "raw"; raw.mkdir()
+    srcs = {}
+    for canon, ugly in (("PT01", "run5_42563_S3"), ("PT02", "run5_42981_S7")):
+        r1 = raw / f"{ugly}_R1_001.fastq"; r1.write_text("@r\nACGT\n+\nIIII\n")
+        r2 = raw / f"{ugly}_R2_001.fastq"; r2.write_text("@r\nTTTT\n+\nIIII\n")
+        srcs[canon] = (r1, r2)
+
+    sheet = tmp_path / "samples.csv"
+    sheet.write_text(
+        "sample_id,16s_R1,16s_R2,group\n"
+        + "".join(f"{c},{r1},{r2},{g}\n"
+                 for (c, (r1, r2)), g in zip(srcs.items(), ("BV", "Normal")))
+    )
+
+    cutadapt = _exe(tmp_path / "cutadapt", STUB_CUTADAPT)
+    rscript = _exe(tmp_path / "Rscript", STUB_RSCRIPT)
+    classify = _exe(tmp_path / "classify", STUB_CLASSIFY)
+    db = tmp_path / "vSpeciateIT_V3V4"; db.mkdir()
+    out = tmp_path / "result.h5mu"
+
+    config = {
+        "samples": str(sheet),
+        "composition": {
+            "reads": {
+                "region": "V3V4", "primers": {"fwd": "AAAA", "rev": "TTTT"},
+                "cutadapt": str(cutadapt), "rscript": str(rscript),
+            },
+            "speciateit": {"db": str(db), "classify": str(classify)},
+        },
+        "cst": {"method": "centroid"},
+        "output": str(out),
+    }
+    cfg = tmp_path / "cfg.yaml"; cfg.write_text(yaml.safe_dump(config))
+
+    assert main(["run", "-c", str(cfg), "--workdir", str(tmp_path / "wd")]) == 0
+    m = md.read(out)
+    assert set(m["composition"].obs_names) == {"PT01", "PT02"}   # canonical ids, not the ugly ones
+    assert m.obs.loc["PT01", "group"] == "BV"                    # sheet metadata -> .obs
+    assert m.obs.loc["PT02", "group"] == "Normal"
+
+
 def test_run_emits_snakefile_in_snakemake_mode(tmp_path):
     from microfgt.cli import main
 
