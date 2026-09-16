@@ -23,6 +23,7 @@ shape, but the importer still carries a real-output-validation IOU (no genuine
 from __future__ import annotations
 
 import re
+import warnings
 from pathlib import Path
 
 import anndata as ad
@@ -39,19 +40,46 @@ def _is_number(x) -> bool:
 
 
 def _read_asv_to_taxon(results_path) -> dict[str, str]:
-    """Parse MC_order7_results.txt -> {ASV id: Classification}, auto-detecting a header."""
+    """Parse MC_order7_results.txt -> {ASV id: Classification}, auto-detecting a header.
+
+    Validates the file has the documented shape (tab-separated, with a numeric posterior
+    column) and fails loudly if not — rather than silently trusting columns 0/1 as
+    id+classification on a mis-delimited or mis-shaped file.
+    """
     raw = pd.read_csv(results_path, sep="\t", header=None, dtype=str)
     if raw.shape[1] < 2:
         raise ValueError(
-            f"{results_path} does not look like speciateIT output "
-            "(need at least 'Sequence ID' and 'Classification' tab-separated columns)."
+            f"{results_path} does not look like speciateIT MC_order7_results output: expected "
+            "tab-separated 'Sequence ID<TAB>Classification<TAB>posterior<TAB>nDecisions', but "
+            f"found {raw.shape[1]} column(s). Is the file tab-delimited?"
         )
-    # Detect a header row: in real output the 3rd col is the posterior probability
-    # (numeric). If it is non-numeric on row 0, row 0 is a header.
+    # Detect a header row: in real output the 3rd col is the posterior probability (numeric).
+    # If it is non-numeric on row 0, row 0 is a header.
     probe_col = 2 if raw.shape[1] > 2 else 1
-    if not _is_number(raw.iloc[0, probe_col]):
-        raw = raw.iloc[1:]
-    return dict(zip(raw.iloc[:, 0].astype(str), raw.iloc[:, 1].astype(str)))
+    data = raw.iloc[1:] if not _is_number(raw.iloc[0, probe_col]) else raw
+    if len(data) == 0:
+        raise ValueError(f"{results_path} has no data rows (a header with no records?).")
+    # Structural check: on a real 4-column file the posterior (col 2) is numeric across the
+    # data rows. If it mostly isn't, the file isn't shaped like speciateIT output (wrong file,
+    # delimiter, or column order) — raise rather than mis-map columns 0/1.
+    if raw.shape[1] > 2:
+        n_numeric = int(data.iloc[:, 2].map(_is_number).sum())
+        if n_numeric < 0.5 * len(data):
+            raise ValueError(
+                f"{results_path}: the 3rd column should be the posterior probability (numeric), "
+                f"but only {n_numeric} of {len(data)} data rows are numeric there. This does not "
+                "look like a genuine MC_order7_results.txt (wrong file, delimiter, or column "
+                "order?)."
+            )
+    ids = data.iloc[:, 0].astype(str)
+    dupes = ids[ids.duplicated()].unique()
+    if len(dupes):
+        warnings.warn(
+            f"{results_path}: {len(dupes)} duplicate sequence id(s) (e.g. {dupes[0]}); "
+            "keeping the last classification for each.",
+            stacklevel=2,
+        )
+    return dict(zip(ids, data.iloc[:, 1].astype(str)))
 
 
 def _read_fasta(fasta_path) -> dict[str, str]:
@@ -188,6 +216,17 @@ def import_speciateit(results_path, count_table_path, fasta=None, db=None) -> ad
     ct = pd.read_csv(count_table_path, index_col=0)  # samples x ASVs
     ct.index = ct.index.astype(str)
     asvs = [str(c) for c in ct.columns]
+
+    # Guard against a silently all-unclassified result: if NONE of the count table's ASVs match
+    # a sequence id in the results file, the two inputs don't correspond (different runs or id
+    # schemes) — fail loudly instead of returning an all-unclassified composition.
+    if asv2taxon and not any(a in asv2taxon for a in asvs):
+        raise ValueError(
+            f"None of the {len(asvs)} ASVs in the count table ({count_table_path}) match any "
+            f"sequence id in the speciateIT results ({results_path}): e.g. results id "
+            f"'{next(iter(asv2taxon))}' vs count-table ASV '{asvs[0]}'. The results file and "
+            "count table are probably from different runs, or their ids don't correspond."
+        )
 
     resolve_genus = make_genus_resolver(db)
     classification = [asv2taxon.get(a) for a in asvs]  # None -> unclassified (kept as a feature)
