@@ -14,6 +14,10 @@ reproducible, provenance-recorded runs; honest sample reconciliation across assa
 
 ## Install
 
+> ⚠️ **Platform: Linux.** v1 targets **Linux**; **macOS is not supported** (the shotgun stack
+> has no Apple-Silicon `osx-arm64` build, and speciateIT/conda break on spaces in macOS home
+> paths). Run microFGT on a Linux host.
+
 ```bash
 pip install -e ".[dev]"     # from a clone, with test deps
 ```

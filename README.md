@@ -35,6 +35,11 @@ provides**: paired FASTQs run the full chain, an ASV table (16S) or a compiled V
 Two things are needed: the **conda environment** (the tools — you own this) and, for the 16S
 arm, the **speciateIT binary + a vSpeciateDB model** (`microfgt setup` owns this).
 
+> ⚠️ **Platform: Linux.** v1 targets **Linux** — an HPC cluster or any Linux machine.
+> **macOS is not supported in v1:** the shotgun stack has no Apple-Silicon (`osx-arm64`) build,
+> and speciateIT/conda break on the spaces common in macOS home directories. Run microFGT on a
+> Linux host.
+
 ### 16S (amplicon)
 
 ```bash
@@ -70,11 +75,9 @@ The `microfgt-16s.yaml` that `setup` writes is a **self-test** wired to a bundle
 its calls are biologically meaningful only when `--region V3V4` (for other regions it just proves
 the plumbing runs). Point the config at your own data (below) for real results.
 
-> **Note (paths with spaces):** speciateIT's `classify` breaks on spaces in a path, and conda
-> won't create an env under a spaced prefix. On a machine whose home dir has a space (e.g.
-> `/Users/First Last/`), give `--dest` a space-free location and create the env at a space-free
-> prefix: `conda env create -f environment-16s.yml -p /Users/Shared/microfgt-16s` (then
-> `conda activate /Users/Shared/microfgt-16s`). `microfgt setup` warns when `--dest` has a space.
+> **Note (avoid spaces in paths):** speciateIT's `classify` breaks on spaces in a path, and conda
+> won't create an env under a spaced prefix — install, and point `--dest`, at a space-free
+> location. `microfgt setup` warns when `--dest` has a space.
 
 ### Full stack (16S + shotgun/VISTA)
 
@@ -82,9 +85,8 @@ the plumbing runs). Point the config at your own data (below) for real results.
 conda env create -f environment.yml && conda activate microfgt && pip install -e ".[dev]"
 ```
 
-> ⚠️ The full `environment.yml` does **not** solve on Apple Silicon — VISTA's `r-randomforestsrc`
-> has no `osx-arm64` build. On an arm64 Mac, use the lean 16S env above; the shotgun arm needs an
-> `osx-64` (Rosetta) env or a Linux host.
+> On Linux this installs the full 16S + shotgun stack in one env — the path for the combined
+> multi-omics workflow. (It does not solve on macOS/Apple Silicon; see the platform note above.)
 
 ## Quickstart
 
