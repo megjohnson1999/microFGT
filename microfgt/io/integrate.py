@@ -65,6 +65,16 @@ def _arm_sample_sets(mods: dict) -> tuple[set, set]:
     return s16, shotgun
 
 
+def _require_unique_index(df: pd.DataFrame, what: str) -> None:
+    """Raise a clear error if a sample-keyed table has duplicate ids (pandas' own reindex
+    error — 'cannot reindex on an axis with duplicate labels' — is cryptic)."""
+    dup = df.index[df.index.duplicated()].unique()
+    if len(dup):
+        shown = ", ".join(map(str, dup[:10]))
+        more = "" if len(dup) <= 10 else f" (+{len(dup) - 10} more)"
+        raise ValueError(f"{what} has duplicate sample ids: {shown}{more}")
+
+
 def attach_cst_annotations(mdata: md.MuData, cst: pd.DataFrame) -> None:
     """Attach CST results to ``mdata``, keeping the sample annotation frame clean.
 
@@ -77,6 +87,7 @@ def attach_cst_annotations(mdata: md.MuData, cst: pd.DataFrame) -> None:
     """
     cst = cst.copy()
     cst.index = cst.index.astype(str)
+    _require_unique_index(cst, "CST table")
     union = list(mdata.obs_names)
 
     sim_cols = [c for c in cst.columns if str(c).endswith("_sim")]
@@ -104,6 +115,7 @@ def attach_mgcst_annotations(mdata: md.MuData, mgcst: pd.DataFrame) -> None:
     """
     mgcst = mgcst.copy()
     mgcst.index = mgcst.index.astype(str)
+    _require_unique_index(mgcst, "mgCST table")
     aligned = mgcst.reindex(list(mdata.obs_names))
     for col in mgcst.columns:
         mdata.obs[col] = aligned[col].to_numpy()
@@ -206,6 +218,7 @@ def build_mudata(
     if obs is not None:
         obs = obs.copy()
         obs.index = obs.index.astype(str)
+        _require_unique_index(obs, "obs (sample metadata)")
         aligned = obs.reindex(union)
         for col in aligned.columns:
             mdata.obs[col] = aligned[col].to_numpy()

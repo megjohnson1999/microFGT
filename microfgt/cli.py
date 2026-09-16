@@ -27,6 +27,10 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("-c", "--config", required=True, help="YAML workflow config.")
     run.add_argument("-o", "--output", help="Output .h5mu (overrides config 'output').")
     run.add_argument("--workdir", help="Directory for intermediate artifacts.")
+    run.add_argument("--keep", action="store_true",
+                     help="Keep the intermediate work directory. By default an auto-created temp "
+                          "workdir is removed after a successful run; an explicit --workdir is "
+                          "always kept.")
     run.add_argument("--executor", choices=["local", "snakemake"], default="local")
     run.set_defaults(_run=_cmd_run)
 
@@ -131,6 +135,7 @@ def _cmd_run(args: argparse.Namespace) -> None:
             "sample sheets aren't wired into the snakemake executor yet — "
             "use --executor local (the default)."
         )
+    auto_workdir = args.workdir is None
     workdir = args.workdir or tempfile.mkdtemp(prefix="microfgt_")
     # If the config declares `samples: <sheet.csv>`, stage it: symlink each sample's reads under
     # canonical names and point the FASTQ entry points at them (so the sample_id flows through).
@@ -149,6 +154,15 @@ def _cmd_run(args: argparse.Namespace) -> None:
     print(f"entry-point plan: {plan}")
     written = LocalExecutor().run(stages, workdir, config, out)
     print(f"wrote {written}")
+    # Clean up an auto-created temp workdir on success (provenance is folded into the .h5mu);
+    # keep an explicit --workdir, or any workdir under --keep, and print where it is. On failure
+    # the run raises before here, leaving the workdir for debugging.
+    if auto_workdir and not args.keep:
+        import shutil
+
+        shutil.rmtree(workdir, ignore_errors=True)
+    else:
+        print(f"intermediate artifacts kept in {workdir}")
 
 
 def _cmd_check(args: argparse.Namespace) -> None:
