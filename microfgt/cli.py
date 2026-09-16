@@ -62,6 +62,8 @@ def build_parser() -> argparse.ArgumentParser:
     clf.add_argument("-i", "--input", required=True)
     clf.add_argument("-o", "--output", required=True)
     clf.add_argument("-m", "--method", default="centroid")
+    clf.add_argument("--reference", help="Centroid set: '2024' (default, modern names) | '2020' "
+                     "(the paper-validated set) | a path to a custom centroids CSV.")
     clf.set_defaults(_run=_cmd_classify)
 
     cmp = sub.add_parser("compare", help="Run a hypothesis-test verb on a .h5mu; print/save the result.")
@@ -239,7 +241,8 @@ def _cmd_classify(args: argparse.Namespace) -> None:
     mod = "composition_taxon" if "composition_taxon" in mdata.mod else "composition"
     if mod not in mdata.mod:
         raise SystemExit("Input has no composition modality to classify.")
-    cst = classify_cst(mdata[mod], method=args.method)
+    kwargs = {"reference": args.reference} if args.reference else {}
+    cst = classify_cst(mdata[mod], method=args.method, **kwargs)
     _attach_cst(mdata, cst)
     mdata.write(args.output)
     print(f"wrote {args.output}: classified CST ({args.method}) for {cst.shape[0]} samples")

@@ -99,6 +99,19 @@ def test_run_keep_preserves_workdir(real_fixtures, test_data, tmp_path, monkeypa
     assert "kept in" in capsys.readouterr().out
 
 
+def test_cli_classify_reference_selects_centroid_set(real_fixtures, test_data, tmp_path):
+    """`classify --reference 2020` (the paper-validated set) is accepted and produces CST."""
+    base = run_workflow({"composition": {"speciateit": {
+        "results": str(test_data / "speciateit_MC_order7_results.synthetic.txt"),
+        "count_table": str(real_fixtures / "speciateit_test_count_table.csv"),
+    }}})
+    base_path = tmp_path / "base.h5mu"
+    base.write(base_path)
+    out = tmp_path / "clf2020.h5mu"
+    assert main(["classify", "-i", str(base_path), "-o", str(out), "--reference", "2020"]) == 0
+    assert "CST" in md.read(out).obs.columns
+
+
 def test_cli_classify_then_analyze_on_existing_h5mu(real_fixtures, test_data, tmp_path):
     # First produce a composition-only object (no CST/analysis), then drive the subcommands.
     base = run_workflow({

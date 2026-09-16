@@ -148,7 +148,7 @@ its wiring exercised end-to-end but has never run against the real tool's output
 
 | Piece | Status |
 |---|---|
-| **Centroid CST → VALENCIA** | ✅ **Validated against ground truth** — 99.94% subCST agreement on all 13,231 published samples (≥99.9% target), plus exact reproduction of genuine `Valencia.py` output on the head fixture. |
+| **Centroid CST → VALENCIA** | ✅ **Validated against ground truth (on the 2020 centroids)** — 99.94% subCST agreement on all 13,231 published samples (≥99.9% target), plus exact reproduction of genuine `Valencia.py` output on the head fixture. **Caveat:** that 99.94% is the *2020 paper-reproduction* set; the shipped **default is the 2024 (VALENCIA2) set** — recommended because it matches modern speciateIT taxonomy, but not itself benchmarked against a 2024-named gold standard (none is published). Select the validated set with `cst: {reference: "2020"}` (or `microfgt classify --reference 2020`) for paper-comparable calls. |
 | `import_virgo` | ✅ Real-output validated (`virgo_sub*.out`). |
 | `import_valencia` | ✅ Real-output validated (`valencia_genuine_output_head.csv`). |
 | `import_virgo2` / `import_mgcst` (VISTA) | ✅ Real-output validated against the public ENA/PRJEB34536 fixtures (compiled gene matrix + taxon/KEGG annotation; genuine `vista_mgCSTs.csv`). |
