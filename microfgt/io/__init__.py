@@ -11,6 +11,7 @@ from microfgt.io.phyloseq import existing_cst, import_phyloseq
 from microfgt.io.samplesheet import (
     SampleSheetReport,
     read_samplesheet,
+    stage_samplesheet,
     validate_samplesheet,
 )
 from microfgt.io.speciateit import collapse_to_taxon, import_speciateit
@@ -37,5 +38,6 @@ __all__ = [
     "import_virgo2",
     "import_virgo2_taxonomy",
     "read_samplesheet",
+    "stage_samplesheet",
     "validate_samplesheet",
 ]

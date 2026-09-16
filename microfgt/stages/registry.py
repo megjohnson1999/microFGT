@@ -243,8 +243,15 @@ def _run_integrate(ctx: StageContext) -> None:
     if comp is not None and ctx.config.get("analysis"):
         apply_analysis(comp, ctx.config["analysis"])
 
+    # Per-sample metadata staged from a sample sheet (stage_samplesheet), if any -> .obs.
+    obs = None
+    obs_csv = ctx.workdir / "samplesheet_obs.csv"
+    if obs_csv.exists():
+        obs = pd.read_csv(obs_csv, index_col=0)
+        obs.index = obs.index.astype(str)
+
     mdata = build_mudata(
-        composition=comp, function=function, cst=cst,
+        composition=comp, function=function, cst=cst, obs=obs,
         composition_taxon_shotgun=taxon_sg, mgcst=mgcst,
     )
     prov = _collect_provenance(ctx.workdir)

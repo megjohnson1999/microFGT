@@ -120,11 +120,21 @@ def _cmd_run(args: argparse.Namespace) -> None:
         speciateit_space_warnings,
     )
 
+    from microfgt.io import stage_samplesheet
+
     config = _load_config(args.config)
     out = args.output or config.get("output")
     if not out:
         raise SystemExit("No output path: pass -o/--output or set 'output:' in the config.")
+    if config.get("samples") and args.executor == "snakemake":
+        raise SystemExit(
+            "sample sheets aren't wired into the snakemake executor yet — "
+            "use --executor local (the default)."
+        )
     workdir = args.workdir or tempfile.mkdtemp(prefix="microfgt_")
+    # If the config declares `samples: <sheet.csv>`, stage it: symlink each sample's reads under
+    # canonical names and point the FASTQ entry points at them (so the sample_id flows through).
+    config = stage_samplesheet(config, workdir)
     for w in speciateit_space_warnings(config, workdir=workdir):
         print(w)
     stages = resolve("mudata", provided_artifacts(config))

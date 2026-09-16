@@ -1,8 +1,9 @@
-"""Sample-sheet reader + validator."""
+"""Sample-sheet reader + validator + staging."""
 
+import pandas as pd
 import pytest
 
-from microfgt.io import read_samplesheet, validate_samplesheet
+from microfgt.io import read_samplesheet, stage_samplesheet, validate_samplesheet
 
 
 def _touch(d, *names):
@@ -88,3 +89,49 @@ def test_cli_check_samplesheet(tmp_path, capsys):
     bad = _write_sheet(tmp_path / "bad.csv", [["PT01", "missing.fq", "", "", ""]])
     with pytest.raises(SystemExit):
         main(["check-samplesheet", "-s", str(bad)])
+
+
+def test_stage_renames_to_canonical_and_wires_config(tmp_path):
+    """Staging symlinks messy source files under canonical {sample_id}_R1 names, points the
+    FASTQ entry points at them, and (crucially) the pipeline's own discovery then reads back the
+    canonical sample_id — so both arms line up by the id the user declared."""
+    from microfgt.orchestrate.cutadapt import discover_pairs
+
+    data = tmp_path / "data"
+    data.mkdir()
+    # deliberately messy, arm-specific real-world-style names for the SAME sample
+    _touch(data,
+           "M1031_FRESH_42563_1_B9_806_S21_R1_001.fastq.gz",
+           "M1031_FRESH_42563_1_B9_806_S21_R2_001.fastq.gz",
+           "NovaSeq_N1034_FGT_42563_repool_R1_001.fastq.gz",
+           "NovaSeq_N1034_FGT_42563_repool_R2_001.fastq.gz")
+    sheet = tmp_path / "s.csv"
+    sheet.write_text(
+        "sample_id,16s_R1,16s_R2,shotgun_R1,shotgun_R2,group\n"
+        "PT01,"
+        "data/M1031_FRESH_42563_1_B9_806_S21_R1_001.fastq.gz,"
+        "data/M1031_FRESH_42563_1_B9_806_S21_R2_001.fastq.gz,"
+        "data/NovaSeq_N1034_FGT_42563_repool_R1_001.fastq.gz,"
+        "data/NovaSeq_N1034_FGT_42563_repool_R2_001.fastq.gz,BV\n"
+    )
+    workdir = tmp_path / "wd"
+    workdir.mkdir()
+    config = stage_samplesheet({"samples": str(sheet)}, workdir)
+
+    staged16 = workdir / "staged" / "16s"
+    assert config["composition"]["reads"]["fastq_dir"] == str(staged16)
+    assert config["metagenomics"]["reads"]["fastq_dir"] == str(workdir / "staged" / "shotgun")
+
+    link = staged16 / "PT01_R1.fastq.gz"
+    assert link.is_symlink() and link.resolve().name.startswith("M1031_FRESH_42563")
+    # the real discovery function now yields the canonical id from the tidy staged names
+    assert {s for s, *_ in discover_pairs(staged16)} == {"PT01"}
+    assert {s for s, *_ in discover_pairs(workdir / "staged" / "shotgun")} == {"PT01"}
+
+    obs = pd.read_csv(workdir / "samplesheet_obs.csv", index_col=0)
+    assert obs.loc["PT01", "group"] == "BV"
+
+
+def test_stage_is_noop_without_samples_key(tmp_path):
+    cfg = {"composition": {"reads": {"fastq_dir": "x"}}}
+    assert stage_samplesheet(cfg, tmp_path) is cfg

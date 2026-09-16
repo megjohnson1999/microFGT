@@ -164,3 +164,80 @@ def validate_samplesheet(df: pd.DataFrame, base_dir=None) -> SampleSheetReport:
         )
 
     return rpt
+
+
+def _resolve(val, base: Path | None) -> Path:
+    p = Path(val)
+    if base is not None and not p.is_absolute():
+        p = base / p
+    return p
+
+
+def _stage_arm(df: pd.DataFrame, arm: str, dest_dir: Path, base: Path | None) -> int:
+    """Symlink each sample's reads for one arm into ``dest_dir`` under canonical
+    ``{sample_id}_R1``/``_R2`` names, so the existing filename-based discovery picks up the
+    sample_id. Returns the number of samples staged for this arm."""
+    r1col, r2col = _ARMS[arm]
+    n = 0
+    for _, row in df.iterrows():
+        sid = row[ID_COL]
+        if pd.isna(sid) or not _arm_present(row, arm):
+            continue
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        for read, col in (("R1", r1col), ("R2", r2col)):
+            val = row.get(col)
+            if col in row and pd.notna(val):
+                # Normalise the staged extension to .fastq[.gz] (what discovery globs), but keep
+                # the real compression so downstream tools read it correctly.
+                suffix = ".fastq.gz" if str(val).endswith(".gz") else ".fastq"
+                link = dest_dir / f"{sid}_{read}{suffix}"
+                if link.is_symlink() or link.exists():
+                    link.unlink()
+                link.symlink_to(_resolve(val, base).resolve())
+        n += 1
+    return n
+
+
+def stage_samplesheet(config: dict, workdir) -> dict:
+    """Honour a ``samples: <sheet.csv>`` config key by materialising the sheet into the run.
+
+    Validates the sheet (raising on blocking problems), symlinks each sample's reads into
+    per-arm dirs under canonical ``{sample_id}_R1/_R2`` names, points the FASTQ entry points at
+    those dirs, and writes the sheet's metadata columns to ``<workdir>/samplesheet_obs.csv`` (the
+    integrate stage attaches them to the object's ``.obs``). Returns the (possibly modified)
+    config; a no-op when there is no ``samples`` key.
+    """
+    sheet = config.get("samples")
+    if not sheet:
+        return config
+
+    sheet = Path(sheet)
+    base = sheet.parent
+    df = read_samplesheet(sheet)
+    rpt = validate_samplesheet(df, base_dir=base)
+    if not rpt.ok:
+        raise ValueError("sample sheet has problems:\n  - " + "\n  - ".join(rpt.problems))
+
+    workdir = Path(workdir)
+    config = dict(config)
+
+    if _stage_arm(df, "16s", workdir / "staged" / "16s", base):
+        comp = dict(config.get("composition") or {})
+        reads = dict(comp.get("reads") or {})
+        reads["fastq_dir"] = str(workdir / "staged" / "16s")
+        comp["reads"] = reads
+        config["composition"] = comp
+
+    if _stage_arm(df, "shotgun", workdir / "staged" / "shotgun", base):
+        mg = dict(config.get("metagenomics") or {})
+        reads = dict(mg.get("reads") or {})
+        reads["fastq_dir"] = str(workdir / "staged" / "shotgun")
+        mg["reads"] = reads
+        config["metagenomics"] = mg
+
+    meta_cols = [c for c in df.columns if c not in _READ_COLS and c != ID_COL]
+    if meta_cols:
+        obs = df.loc[df[ID_COL].notna(), [ID_COL] + meta_cols].set_index(ID_COL)
+        obs.to_csv(workdir / "samplesheet_obs.csv")
+
+    return config
