@@ -207,3 +207,34 @@ def test_real_fixtures_are_not_a_co_assayed_cohort(real_fixtures, test_data):
     mdata = build_mudata(composition=comp, function=func, cst=cst)
     assert "composition_taxon" in mdata.mod          # roll-up materialised
     assert mdata.uns["reconciliation"]["shared_all"] == 0  # reported, honestly
+
+
+def test_cross_arm_zero_overlap_warns_and_records():
+    """Both arms present but sharing no sample ids => loud warning + recorded overlap, not a
+    silent non-join."""
+    asv_class = {"asv1": "Lactobacillus_crispatus", "asv2": "Gardnerella_vaginalis"}
+    comp = _asv_composition(["S1", "S2", "S3"], asv_class)
+    func = _genes(["X1", "X2"], ["g1", "g2"])        # disjoint sample ids
+    with pytest.warns(UserWarning, match="share NO sample ids"):
+        mdata = build_mudata(composition=comp, function=func)
+    assert mdata.uns["cross_arm_overlap"] == {"n_16s": 3, "n_shotgun": 2, "n_shared": 0}
+
+
+def test_duplicate_cst_ids_raise_clear_error():
+    """A duplicate sample id in the CST table gives a clear message, not pandas' cryptic
+    'cannot reindex on an axis with duplicate labels'."""
+    asv_class = {"asv1": "Lactobacillus_crispatus", "asv2": "Gardnerella_vaginalis"}
+    comp = _asv_composition(["S1", "S2"], asv_class)
+    cst = pd.DataFrame({"CST": ["I", "III"]}, index=["S1", "S1"])   # duplicate id
+    with pytest.raises(ValueError, match="duplicate sample ids"):
+        build_mudata(composition=comp, cst=cst)
+
+
+def test_cross_arm_matching_ids_do_not_warn(recwarn):
+    """When the arms share their sample ids, the object joins and the guard stays quiet."""
+    asv_class = {"asv1": "Lactobacillus_crispatus", "asv2": "Gardnerella_vaginalis"}
+    comp = _asv_composition(["S1", "S2"], asv_class)
+    func = _genes(["S1", "S2"], ["g1", "g2"])         # same sample ids
+    mdata = build_mudata(composition=comp, function=func)
+    assert mdata.uns["cross_arm_overlap"]["n_shared"] == 2
+    assert not any("share NO sample ids" in str(w.message) for w in recwarn)

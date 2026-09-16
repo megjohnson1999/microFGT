@@ -61,6 +61,57 @@ def test_cli_run_writes_h5mu_and_reloads(real_fixtures, test_data, tmp_path, cap
     assert "alpha_shannon" in reloaded["composition"].obs
 
 
+def test_run_cleans_up_auto_workdir(real_fixtures, test_data, tmp_path, monkeypatch):
+    """An auto-created temp workdir is removed after a successful run (no leak)."""
+    import tempfile
+
+    import yaml
+
+    out = tmp_path / "out.h5mu"
+    cfg = tmp_path / "cfg.yaml"
+    cfg.write_text(yaml.safe_dump(_config(real_fixtures, test_data, out)))
+
+    wd = tmp_path / "auto_wd"
+
+    def fake_mkdtemp(*a, **k):
+        wd.mkdir(exist_ok=True)
+        return str(wd)
+
+    monkeypatch.setattr(tempfile, "mkdtemp", fake_mkdtemp)
+    assert main(["run", "-c", str(cfg)]) == 0          # no --workdir, no --keep
+    assert out.exists()
+    assert not wd.exists()                              # cleaned up
+
+
+def test_run_keep_preserves_workdir(real_fixtures, test_data, tmp_path, monkeypatch, capsys):
+    import tempfile
+
+    import yaml
+
+    out = tmp_path / "out.h5mu"
+    cfg = tmp_path / "cfg.yaml"
+    cfg.write_text(yaml.safe_dump(_config(real_fixtures, test_data, out)))
+
+    wd = tmp_path / "kept_wd"
+    monkeypatch.setattr(tempfile, "mkdtemp", lambda *a, **k: (wd.mkdir(exist_ok=True), str(wd))[1])
+    assert main(["run", "-c", str(cfg), "--keep"]) == 0
+    assert wd.exists()                                 # kept
+    assert "kept in" in capsys.readouterr().out
+
+
+def test_cli_classify_reference_selects_centroid_set(real_fixtures, test_data, tmp_path):
+    """`classify --reference 2020` (the paper-validated set) is accepted and produces CST."""
+    base = run_workflow({"composition": {"speciateit": {
+        "results": str(test_data / "speciateit_MC_order7_results.synthetic.txt"),
+        "count_table": str(real_fixtures / "speciateit_test_count_table.csv"),
+    }}})
+    base_path = tmp_path / "base.h5mu"
+    base.write(base_path)
+    out = tmp_path / "clf2020.h5mu"
+    assert main(["classify", "-i", str(base_path), "-o", str(out), "--reference", "2020"]) == 0
+    assert "CST" in md.read(out).obs.columns
+
+
 def test_cli_classify_then_analyze_on_existing_h5mu(real_fixtures, test_data, tmp_path):
     # First produce a composition-only object (no CST/analysis), then drive the subcommands.
     base = run_workflow({

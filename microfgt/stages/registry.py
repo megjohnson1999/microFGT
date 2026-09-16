@@ -198,8 +198,12 @@ def _run_cst_classify(ctx: StageContext) -> None:
     adata = ad.read_h5ad(ctx.path("composition"))
     # CST reads the taxon roll-up; collapse ASV-grain composition first.
     taxon = collapse_to_taxon(adata) if "classification" in adata.var else adata
-    method = (ctx.config.get("cst") or {}).get("method", "centroid")
-    classify_cst(taxon, method=method).to_csv(ctx.path("cst"))
+    cst_cfg = ctx.config.get("cst") or {}
+    method = cst_cfg.get("method", "centroid")
+    # Optional centroid-set selection (e.g. "2020" for the paper-validated set, "2024" default,
+    # or a path to a custom centroids CSV). Absent -> the method's own default.
+    kwargs = {"reference": cst_cfg["reference"]} if cst_cfg.get("reference") else {}
+    classify_cst(taxon, method=method, **kwargs).to_csv(ctx.path("cst"))
 
 
 def _run_cst_valencia(ctx: StageContext) -> None:
@@ -243,8 +247,15 @@ def _run_integrate(ctx: StageContext) -> None:
     if comp is not None and ctx.config.get("analysis"):
         apply_analysis(comp, ctx.config["analysis"])
 
+    # Per-sample metadata staged from a sample sheet (stage_samplesheet), if any -> .obs.
+    obs = None
+    obs_csv = ctx.workdir / "samplesheet_obs.csv"
+    if obs_csv.exists():
+        obs = pd.read_csv(obs_csv, index_col=0)
+        obs.index = obs.index.astype(str)
+
     mdata = build_mudata(
-        composition=comp, function=function, cst=cst,
+        composition=comp, function=function, cst=cst, obs=obs,
         composition_taxon_shotgun=taxon_sg, mgcst=mgcst,
     )
     prov = _collect_provenance(ctx.workdir)

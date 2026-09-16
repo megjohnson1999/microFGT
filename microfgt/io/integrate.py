@@ -19,6 +19,7 @@ cross-modality integration needs a real co-assayed dataset (an open question in 
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 
 import anndata as ad
@@ -50,6 +51,30 @@ class Reconciliation:
         return s
 
 
+# The 16S and shotgun "arms" — the two sample sets whose overlap the cross-arm join depends on.
+# (composition_taxon is a roll-up of composition, so it carries 16S's samples; likewise
+# composition_taxon_shotgun rolls up function, so it carries the shotgun samples.)
+_S16_MODS = ("composition", "composition_taxon")
+_SHOTGUN_MODS = ("function", "composition_taxon_shotgun")
+
+
+def _arm_sample_sets(mods: dict) -> tuple[set, set]:
+    """The 16S and shotgun sample-id sets present in ``mods`` (either may be empty)."""
+    s16 = {str(s) for k in _S16_MODS if k in mods for s in mods[k].obs_names}
+    shotgun = {str(s) for k in _SHOTGUN_MODS if k in mods for s in mods[k].obs_names}
+    return s16, shotgun
+
+
+def _require_unique_index(df: pd.DataFrame, what: str) -> None:
+    """Raise a clear error if a sample-keyed table has duplicate ids (pandas' own reindex
+    error — 'cannot reindex on an axis with duplicate labels' — is cryptic)."""
+    dup = df.index[df.index.duplicated()].unique()
+    if len(dup):
+        shown = ", ".join(map(str, dup[:10]))
+        more = "" if len(dup) <= 10 else f" (+{len(dup) - 10} more)"
+        raise ValueError(f"{what} has duplicate sample ids: {shown}{more}")
+
+
 def attach_cst_annotations(mdata: md.MuData, cst: pd.DataFrame) -> None:
     """Attach CST results to ``mdata``, keeping the sample annotation frame clean.
 
@@ -62,6 +87,7 @@ def attach_cst_annotations(mdata: md.MuData, cst: pd.DataFrame) -> None:
     """
     cst = cst.copy()
     cst.index = cst.index.astype(str)
+    _require_unique_index(cst, "CST table")
     union = list(mdata.obs_names)
 
     sim_cols = [c for c in cst.columns if str(c).endswith("_sim")]
@@ -89,6 +115,7 @@ def attach_mgcst_annotations(mdata: md.MuData, mgcst: pd.DataFrame) -> None:
     """
     mgcst = mgcst.copy()
     mgcst.index = mgcst.index.astype(str)
+    _require_unique_index(mgcst, "mgCST table")
     aligned = mgcst.reindex(list(mdata.obs_names))
     for col in mgcst.columns:
         mdata.obs[col] = aligned[col].to_numpy()
@@ -191,6 +218,7 @@ def build_mudata(
     if obs is not None:
         obs = obs.copy()
         obs.index = obs.index.astype(str)
+        _require_unique_index(obs, "obs (sample metadata)")
         aligned = obs.reindex(union)
         for col in aligned.columns:
             mdata.obs[col] = aligned[col].to_numpy()
@@ -218,4 +246,24 @@ def build_mudata(
     )
     mdata.uns["reconciliation_summary"] = recon.summary()
     mdata.uns["reconciliation"] = recon.__dict__
+
+    # Cross-arm guard: when BOTH the 16S and shotgun arms are present, the whole point is that
+    # they integrate by shared sample id. If they share NONE, nothing actually joined across
+    # arms (every sample sits in only one) — almost always a sample-naming mismatch, not a real
+    # result. Record the overlap, and in the zero case say so loudly instead of returning a
+    # silent non-join.
+    s16, shotgun = _arm_sample_sets(mods)
+    if s16 and shotgun:
+        overlap = len(s16 & shotgun)
+        mdata.uns["cross_arm_overlap"] = {
+            "n_16s": len(s16), "n_shotgun": len(shotgun), "n_shared": overlap,
+        }
+        if overlap == 0:
+            warnings.warn(
+                f"The 16S ({len(s16)} samples) and shotgun ({len(shotgun)} samples) assays "
+                "share NO sample ids — nothing was integrated across arms (every sample is in "
+                "only one arm). This is almost always a sample-naming mismatch; give the two "
+                "arms matching sample ids so they can be joined.",
+                stacklevel=2,
+            )
     return mdata

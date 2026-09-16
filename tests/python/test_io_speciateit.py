@@ -12,7 +12,7 @@ import pandas as pd
 import pytest
 
 from microfgt.io import collapse_to_taxon, import_speciateit
-from microfgt.io.speciateit import _genus_of, make_genus_resolver
+from microfgt.io.speciateit import _genus_of, _read_asv_to_taxon, make_genus_resolver
 
 RESULTS = "speciateit_MC_order7_results.synthetic.txt"
 
@@ -207,3 +207,37 @@ def test_header_autodetect_matches_headerless(real_fixtures, test_data):
     assert list(a.var_names) == list(b.var_names)
     np.testing.assert_array_equal(a.layers["counts"], b.layers["counts"])
     pd.testing.assert_series_equal(a.var["classification"], b.var["classification"])
+
+
+# --- Fail-loud hardening: a mis-shaped/mismatched input must raise, not silently mis-map ------
+def test_wrong_delimiter_raises(tmp_path):
+    # comma-delimited -> a single tab-column -> not speciateIT-shaped.
+    bad = tmp_path / "r.txt"
+    bad.write_text("ASV1,Lactobacillus_iners,0.97,50\nASV2,Gardnerella_vaginalis,0.98,50\n")
+    with pytest.raises(ValueError, match="tab-delimited"):
+        _read_asv_to_taxon(bad)
+
+
+def test_nonnumeric_posterior_column_raises(tmp_path):
+    # 4 tab columns, but the 3rd (posterior) isn't numeric -> mis-shaped / wrong file.
+    bad = tmp_path / "r.txt"
+    bad.write_text("ASV1\tLactobacillus_iners\tnope\t50\nASV2\tGardnerella_vaginalis\tnope\t50\n")
+    with pytest.raises(ValueError, match="posterior"):
+        _read_asv_to_taxon(bad)
+
+
+def test_duplicate_sequence_ids_warn_and_last_wins(tmp_path):
+    dup = tmp_path / "r.txt"
+    dup.write_text("ASV1\tLactobacillus_iners\t0.97\t50\nASV1\tGardnerella_vaginalis\t0.98\t50\n")
+    with pytest.warns(UserWarning, match="duplicate sequence id"):
+        m = _read_asv_to_taxon(dup)
+    assert m["ASV1"] == "Gardnerella_vaginalis"
+
+
+def test_zero_id_overlap_with_count_table_raises(tmp_path):
+    results = tmp_path / "r.txt"
+    results.write_text("ASV1\tLactobacillus_iners\t0.97\t50\nASV2\tGardnerella_vaginalis\t0.98\t50\n")
+    ct = tmp_path / "ct.csv"
+    ct.write_text("sampleID,X1,X2\nS1,5,3\nS2,2,8\n")   # count-table ASV ids don't match results
+    with pytest.raises(ValueError, match="None of the .* ASVs"):
+        import_speciateit(results, ct)

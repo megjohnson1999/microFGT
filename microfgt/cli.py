@@ -27,12 +27,25 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("-c", "--config", required=True, help="YAML workflow config.")
     run.add_argument("-o", "--output", help="Output .h5mu (overrides config 'output').")
     run.add_argument("--workdir", help="Directory for intermediate artifacts.")
+    run.add_argument("--keep", action="store_true",
+                     help="Keep the intermediate work directory. By default an auto-created temp "
+                          "workdir is removed after a successful run; an explicit --workdir is "
+                          "always kept.")
     run.add_argument("--executor", choices=["local", "snakemake"], default="local")
     run.set_defaults(_run=_cmd_run)
 
     chk = sub.add_parser("check", help="Preflight: verify tools/paths for the resolved entry point.")
     chk.add_argument("-c", "--config", required=True)
     chk.set_defaults(_run=_cmd_check)
+
+    ssc = sub.add_parser(
+        "check-samplesheet",
+        help="Validate a sample sheet (unique ids, files exist, arm overlap).",
+    )
+    ssc.add_argument("-s", "--samplesheet", required=True, help="Sample-sheet CSV.")
+    ssc.add_argument("--base-dir", help="Resolve relative file paths against this directory "
+                     "(default: the sample sheet's own directory).")
+    ssc.set_defaults(_run=_cmd_check_samplesheet)
 
     setup = sub.add_parser(
         "setup", help="Install the 16S prerequisites conda can't (speciateIT + a vSpeciateDB model)."
@@ -49,6 +62,8 @@ def build_parser() -> argparse.ArgumentParser:
     clf.add_argument("-i", "--input", required=True)
     clf.add_argument("-o", "--output", required=True)
     clf.add_argument("-m", "--method", default="centroid")
+    clf.add_argument("--reference", help="Centroid set: '2024' (default, modern names) | '2020' "
+                     "(the paper-validated set) | a path to a custom centroids CSV.")
     clf.set_defaults(_run=_cmd_classify)
 
     cmp = sub.add_parser("compare", help="Run a hypothesis-test verb on a .h5mu; print/save the result.")
@@ -111,11 +126,22 @@ def _cmd_run(args: argparse.Namespace) -> None:
         speciateit_space_warnings,
     )
 
+    from microfgt.io import stage_samplesheet
+
     config = _load_config(args.config)
     out = args.output or config.get("output")
     if not out:
         raise SystemExit("No output path: pass -o/--output or set 'output:' in the config.")
+    if config.get("samples") and args.executor == "snakemake":
+        raise SystemExit(
+            "sample sheets aren't wired into the snakemake executor yet — "
+            "use --executor local (the default)."
+        )
+    auto_workdir = args.workdir is None
     workdir = args.workdir or tempfile.mkdtemp(prefix="microfgt_")
+    # If the config declares `samples: <sheet.csv>`, stage it: symlink each sample's reads under
+    # canonical names and point the FASTQ entry points at them (so the sample_id flows through).
+    config = stage_samplesheet(config, workdir)
     for w in speciateit_space_warnings(config, workdir=workdir):
         print(w)
     stages = resolve("mudata", provided_artifacts(config))
@@ -130,6 +156,15 @@ def _cmd_run(args: argparse.Namespace) -> None:
     print(f"entry-point plan: {plan}")
     written = LocalExecutor().run(stages, workdir, config, out)
     print(f"wrote {written}")
+    # Clean up an auto-created temp workdir on success (provenance is folded into the .h5mu);
+    # keep an explicit --workdir, or any workdir under --keep, and print where it is. On failure
+    # the run raises before here, leaving the workdir for debugging.
+    if auto_workdir and not args.keep:
+        import shutil
+
+        shutil.rmtree(workdir, ignore_errors=True)
+    else:
+        print(f"intermediate artifacts kept in {workdir}")
 
 
 def _cmd_check(args: argparse.Namespace) -> None:
@@ -148,6 +183,24 @@ def _cmd_check(args: argparse.Namespace) -> None:
             print(hint)
         raise SystemExit(f"{len(missing)} prerequisite(s) missing — see above.")
     print("all prerequisites satisfied.")
+
+
+def _cmd_check_samplesheet(args: argparse.Namespace) -> None:
+    from pathlib import Path
+
+    from microfgt.io import read_samplesheet, validate_samplesheet
+
+    df = read_samplesheet(args.samplesheet)
+    base = args.base_dir or Path(args.samplesheet).parent
+    rpt = validate_samplesheet(df, base_dir=base)
+    print(rpt.summary())
+    for w in rpt.warnings:
+        print(f"warning: {w}")
+    for p in rpt.problems:
+        print(f"problem: {p}")
+    if not rpt.ok:
+        raise SystemExit(f"{len(rpt.problems)} problem(s) in the sample sheet — see above.")
+    print("sample sheet OK.")
 
 
 # The 16S tools conda provides — if these are the ones missing, the env is likely just not active.
@@ -188,7 +241,8 @@ def _cmd_classify(args: argparse.Namespace) -> None:
     mod = "composition_taxon" if "composition_taxon" in mdata.mod else "composition"
     if mod not in mdata.mod:
         raise SystemExit("Input has no composition modality to classify.")
-    cst = classify_cst(mdata[mod], method=args.method)
+    kwargs = {"reference": args.reference} if args.reference else {}
+    cst = classify_cst(mdata[mod], method=args.method, **kwargs)
     _attach_cst(mdata, cst)
     mdata.write(args.output)
     print(f"wrote {args.output}: classified CST ({args.method}) for {cst.shape[0]} samples")
