@@ -52,6 +52,20 @@ def test_beta_and_ordinate_written_to_obsp_obsm():
     assert "proportion_explained" in a.uns["X_pcoa"]
 
 
+def test_beta_diversity_is_depth_invariant():
+    """Identical composition at different sequencing depth -> Bray-Curtis 0 (was ~1/3 when
+    computed on raw counts). Guards against beta/ordination/PERMANOVA tracking library size."""
+    X = np.array([[10.0, 20.0, 30.0],   # s0
+                  [20.0, 40.0, 60.0],   # s1 = 2*s0 -> identical composition
+                  [30.0, 0.0, 0.0]],    # s2 -> different composition
+                 dtype=float)
+    a = ad.AnnData(X=X.astype(np.float32), obs=pd.DataFrame(index=["s0", "s1", "s2"]))
+    a.layers["counts"] = X
+    dm = analysis.beta_diversity(a, metric="braycurtis")
+    assert dm["s0", "s1"] == pytest.approx(0.0, abs=1e-6)
+    assert dm["s0", "s2"] > 0.5
+
+
 def test_differential_abundance_returns_per_taxon_result():
     a = _toy_composition()
     res = analysis.differential_abundance(a, group_key="group", method="ancom")
