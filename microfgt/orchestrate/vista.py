@@ -79,6 +79,37 @@ def _write_compiled_from_function(function, dest) -> Path:
     return Path(dest)
 
 
+def _restore_sample_ids(df, compiled):
+    """Undo VISTA's positional ``V1..Vn`` relabeling of sample columns.
+
+    ``run_VISTA.R`` loses the real sample ids and R relabels the compiled matrix's columns
+    positionally as ``V1, V2, …`` (``V1`` = the ``Gene`` column, ``V2`` = the first sample, …).
+    Map them back by column position, using the compiled matrix's own header. ``Vk`` anchors to
+    the k-th column regardless of VISTA dropping/reordering low-count samples. Indices that are
+    not ``V<k>`` (e.g. a future VISTA that preserves ids) are left untouched.
+    """
+    import warnings
+
+    import pandas as pd
+
+    try:
+        cols = pd.read_csv(compiled, sep="\t", nrows=0).columns.tolist()
+    except Exception as e:  # pragma: no cover - defensive; falls back to VISTA's raw index
+        warnings.warn(f"could not read compiled matrix header to restore sample ids: {e}", stacklevel=2)
+        return df
+    remap = {f"V{k + 1}": str(cols[k]) for k in range(len(cols))}  # V1->Gene, V2->sample1, …
+    unmapped = [str(i) for i in df.index if str(i).startswith("V") and str(i) not in remap]
+    if unmapped:
+        warnings.warn(
+            f"VISTA emitted V-labels not in the compiled matrix's columns ({unmapped[:3]}); "
+            "left unmapped — check the VIRGO2 compiled matrix and VISTA output align.",
+            stacklevel=2,
+        )
+    out = df.copy()
+    out.index = pd.Index([remap.get(str(i), str(i)) for i in df.index], name=df.index.name)
+    return out
+
+
 def classify_mgcst_vista(
     function=None, *, vista_repo, outdir, compiled=None,
     rscript: str = "Rscript", timeout: float | None = None, return_record: bool = False,
@@ -107,5 +138,5 @@ def classify_mgcst_vista(
             function, outdir / "VIRGO2_Compiled.summary.NR.txt"
         )
     mgcsts_csv, record = run_vista(compiled, vista_repo, outdir, rscript=rscript, timeout=timeout)
-    df = import_mgcst(mgcsts_csv)
+    df = _restore_sample_ids(import_mgcst(mgcsts_csv), compiled)
     return (df, record) if return_record else df

@@ -48,7 +48,9 @@ def run_virgo2_map(
     """
     py_exe, py_fp = resolve_executable(python, tool="python3 (VIRGO2)")
     script = _virgo2_script(virgo2_dir)
-    outdir = Path(outdir)
+    # Absolute: VIRGO2.py runs with cwd=outdir (run_command below), so any relative path in
+    # argv would resolve *inside* outdir and double up (breaks on a relative --workdir).
+    outdir = Path(outdir).resolve()
     outdir.mkdir(parents=True, exist_ok=True)
 
     combined = outdir / f"{sample}.combined.fq.gz"
@@ -80,7 +82,7 @@ def run_virgo2_compile(
     """
     py_exe, py_fp = resolve_executable(python, tool="python3 (VIRGO2)")
     script = _virgo2_script(virgo2_dir)
-    outdir = Path(outdir)
+    outdir = Path(outdir).resolve()  # cwd=outdir below; keep argv paths absolute (see run_virgo2_map)
 
     argv = [py_exe, str(script), "compile", "-i", str(outdir),
             "-o", str(outdir / "VIRGO2_Compiled")]
