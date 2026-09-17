@@ -26,16 +26,20 @@ import anndata as ad
 import numpy as np
 import pandas as pd
 
+from microfgt.io.speciateit import _genus_of as _genus_of_16s
+
 _COLS = ["gene_id", "read_count", "gene_length"]
 
 
-def _genus_of(taxon: str) -> str:
-    """First token of a VIRGO2 ``Taxa`` string (e.g. 'Lactobacillus_iners' -> 'Lactobacillus').
+def _genus_of(taxon: str):
+    """Genus of a VIRGO2 ``Taxa`` string, using the SAME rule as the 16S side so the shotgun
+    taxon assay is rank-comparable with the 16S ``composition_taxon``.
 
-    Kept identical to the 16S convention (:func:`microfgt.io.speciateit._genus_of`) so the
-    shotgun taxon assay is rank-comparable with the 16S ``composition_taxon`` (the doc's
-    'reconcile the format, not the content')."""
-    return taxon.split("_")[0].split(" ")[0]
+    Delegates to :func:`microfgt.io.speciateit._genus_of`, which strips the species epithet with
+    ``rsplit('_', 1)`` — so Candidatus/polyphyly prefixes survive
+    (``Ca_Lachnocurva_vaginae`` -> ``Ca_Lachnocurva``, not the old ``split('_')[0]`` bug's
+    ``Ca``). Returns ``None`` only for a higher-rank backoff label (honestly unresolved)."""
+    return _genus_of_16s(taxon)
 
 
 def import_virgo(directory, pattern: str = "*.out", taxon_table=None) -> ad.AnnData:
@@ -150,7 +154,7 @@ def import_virgo2(summary, *, taxon_annotation=None, annotations=None) -> ad.Ann
     summary = Path(summary)
     wide = pd.read_csv(summary, sep="\t", index_col=0)  # genes x samples
     wide.index = wide.index.astype(str)
-    wide.columns = [str(c) for c in wide.columns]
+    wide.columns = [str(c).strip() for c in wide.columns]   # sample ids; strip stray whitespace
     if wide.empty:
         raise ValueError(f"{summary} parsed to an empty matrix; expected 'Gene\\t<sample>…'.")
 

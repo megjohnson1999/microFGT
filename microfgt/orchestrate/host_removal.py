@@ -19,7 +19,13 @@ from microfgt.orchestrate._run import resolve_executable, run_command
 from microfgt.orchestrate.cutadapt import discover_pairs
 
 # The RECIPE.md pipeline, with tool/path/thread placeholders filled by run_host_removal.
+# `set -o pipefail` is REQUIRED: without it only the last stage's (samtools fastq) exit status
+# is seen, so an upstream minimap2/samtools failure (bad host index, OOM, truncated ref) is
+# masked — samtools fastq still exits 0 and emits empty/partial FASTQs. FGT reads are ~86% host,
+# so a masked failure here silently guts a sample and everything downstream runs on near-empty
+# input with no error. pipefail makes any stage's failure fail the whole command loudly.
 _PIPELINE = (
+    "set -o pipefail; "
     "{minimap2} -ax sr -t {threads} {host_ref} {r1} {r2} "
     "| {samtools} view -@ {threads} -b -f 12 -F 256 - "
     "| {samtools} sort -n -@ {threads} -m 2G -T {sorttmp} - "

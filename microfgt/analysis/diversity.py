@@ -28,13 +28,23 @@ def alpha_diversity(adata, metric: str = "shannon", layer: str = "counts", key_a
 
 
 def _nonzero_distance_matrix(adata, metric, layer):
-    """Bray–Curtis-style distances on samples that have reads; returns (dm, idx, ids)."""
+    """Bray–Curtis-style distances on samples that have reads; returns (dm, idx, ids).
+
+    Counts are converted to per-sample RELATIVE ABUNDANCE before the distance. Bray–Curtis and
+    the other abundance-based metrics are not depth-invariant, so on raw counts they measure
+    library size rather than composition — two samples with identical composition but different
+    sequencing depth would come out dissimilar, and ordination/PERMANOVA would then track depth
+    (and any clinical variable depth correlates with), not biology. Zero-count samples are masked
+    out first, so the row-sum division never hits 0/0.
+    """
     X = get_count_matrix(adata, layer)
     ids = list(adata.obs_names)
-    mask = X.sum(axis=1) > 0
+    totals = X.sum(axis=1)
+    mask = totals > 0
     idx = np.where(mask)[0]
     sub_ids = [ids[i] for i in idx]
-    dm = _skbio_beta(metric, X[mask], ids=sub_ids)
+    rel = X[mask] / totals[mask][:, None]
+    dm = _skbio_beta(metric, rel, ids=sub_ids)
     return dm, idx, ids, int((~mask).sum())
 
 

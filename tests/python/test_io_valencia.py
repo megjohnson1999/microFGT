@@ -33,3 +33,11 @@ def test_valencia_missing_label_column_is_nan_not_error(tmp_path):
     out = import_valencia(p)
     assert out.loc["S1", "subCST"] == "III-A"
     assert pd.isna(out.loc["S1", "CST"]) and pd.isna(out.loc["S1", "score"])
+
+
+def test_import_valencia_strips_whitespace_sample_ids(tmp_path):
+    """A stray leading/trailing space in a sample id must not survive to the join key."""
+    csv = tmp_path / "v.csv"
+    csv.write_text("sampleID,CST,subCST,score\n S1 ,IV-B,IV-B,0.9\nS2,I,I-A,0.8\n")
+    df = import_valencia(csv)
+    assert list(df.index) == ["S1", "S2"]

@@ -39,6 +39,32 @@ def _is_number(x) -> bool:
         return False
 
 
+def _as_int_counts(values, source: str) -> np.ndarray:
+    """Validate a count matrix and return it as int64, failing LOUDLY on non-integer values.
+
+    A plain ``astype(np.int64)`` silently *floors* — so a table of relative abundances /
+    normalized / rarefied-to-fraction values (0.03, 0.97, …) would become all zeros with no
+    error, yielding a valid-looking but empty composition. Here a genuinely fractional table
+    raises instead, while a float table of whole numbers (e.g. ``100.0``) is accepted.
+    """
+    arr = np.asarray(values, dtype=np.float64)
+    if arr.size:
+        if not np.all(np.isfinite(arr)):
+            raise ValueError(f"{source}: contains NaN/inf; expected a non-negative integer count table.")
+        if np.any(arr < 0):
+            raise ValueError(f"{source}: contains negative values; expected a non-negative integer count table.")
+        rounded = np.rint(arr)
+        if np.any(np.abs(arr - rounded) > 1e-6):
+            bad = arr[np.abs(arr - rounded) > 1e-6].ravel()[0]
+            raise ValueError(
+                f"{source}: contains non-integer values (e.g. {bad}). microFGT expects an integer "
+                "COUNT table (samples x features), not relative abundances / normalized / "
+                "rarefied-to-fraction values — CST and the compositional steps need counts."
+            )
+        return rounded.astype(np.int64)
+    return arr.astype(np.int64)
+
+
 def _read_asv_to_taxon(results_path) -> dict[str, str]:
     """Parse MC_order7_results.txt -> {ASV id: Classification}, auto-detecting a header.
 
@@ -239,11 +265,11 @@ def import_speciateit(results_path, count_table_path, fasta=None, db=None) -> ad
         seq_by_id = _read_fasta(fasta)
         var["sequence"] = [seq_by_id.get(a) for a in asvs]
 
+    counts = _as_int_counts(ct.to_numpy(), f"count table {count_table_path}")
     obs = pd.DataFrame(
-        {"read_count": ct.to_numpy().sum(axis=1)},
+        {"read_count": counts.sum(axis=1)},
         index=pd.Index(ct.index, name="sample"),
     )
-    counts = ct.to_numpy().astype(np.int64)
     adata = ad.AnnData(X=counts.astype(np.float32), obs=obs, var=var)
     adata.layers["counts"] = counts
     return adata

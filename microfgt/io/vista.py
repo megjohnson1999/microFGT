@@ -39,7 +39,7 @@ def import_mgcst(mgcsts_csv) -> pd.DataFrame:
         land on the global ``.obs`` beside (never merged with) the 16S ``CST``.
     """
     raw = pd.read_csv(mgcsts_csv, index_col=0)
-    raw.index = raw.index.astype(str)
+    raw.index = raw.index.astype(str).str.strip()   # a stray space would drop the sample from the join
     raw.index.name = "sample"
     missing = {"mgCST", "max_YC_theta"} - set(raw.columns)
     if missing:

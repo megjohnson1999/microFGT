@@ -62,6 +62,26 @@ def test_host_removal_survives_spaces_in_paths(tmp_path):
     assert (nonhost / "s1_R1.fastq").exists() and (nonhost / "s1_R2.fastq").exists()
 
 
+def test_host_removal_fails_loud_when_minimap2_fails(tmp_path):
+    """pipefail: an upstream minimap2 failure must fail the whole command, not be masked by
+    the terminal `samtools fastq` exiting 0 (which would silently emit empty non-host reads)."""
+    from microfgt.orchestrate import run_host_removal
+    from microfgt.orchestrate._run import ToolRunError
+
+    trimmed = tmp_path / "trimmed"; trimmed.mkdir()
+    (trimmed / "s1_R1.fastq").write_text("@r\nA\n+\nI\n")
+    (trimmed / "s1_R2.fastq").write_text("@r\nT\n+\nI\n")
+    host_ref = tmp_path / "host.fna"; host_ref.write_text("")
+
+    failing_minimap2 = "#!/usr/bin/env python3\nimport sys\nsys.exit(3)\n"
+    with pytest.raises(ToolRunError):
+        run_host_removal(
+            trimmed, tmp_path / "nonhost", host_ref,
+            minimap2=str(_exe(tmp_path / "minimap2", failing_minimap2)),
+            samtools=str(_exe(tmp_path / "samtools", STUB_SAMTOOLS)),
+        )
+
+
 def test_virgo2_map_concatenates_r1_then_r2(tmp_path):
     from microfgt.orchestrate import run_virgo2_map
 

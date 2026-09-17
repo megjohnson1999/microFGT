@@ -36,7 +36,7 @@ import anndata as ad
 import numpy as np
 import pandas as pd
 
-from microfgt.io.speciateit import _genus_of
+from microfgt.io.speciateit import _as_int_counts, _genus_of
 
 _LABEL_COLS = ("CST", "subCST", "score")
 _MISSING = {"", "NA", "nan", "None", "<NA>"}
@@ -151,7 +151,7 @@ def import_phyloseq(
         tax = pd.read_csv(out / "tax_table.csv", index_col=0)       # ASV id -> ranks
         sdata = pd.read_csv(out / "sample_data.csv", index_col=0)   # sample -> variables
 
-    counts.index = counts.index.astype(str)
+    counts.index = counts.index.astype(str).str.strip()   # sample ids; strip stray whitespace
     asvs = [str(c) for c in counts.columns]
     taxa.index = taxa.index.astype(str)
     tax.index = tax.index.astype(str)
@@ -169,10 +169,14 @@ def import_phyloseq(
     )
 
     obs = sdata.copy()
-    obs.index = obs.index.astype(str)
+    obs.index = obs.index.astype(str).str.strip()
     obs = obs.reindex(counts.index)
     obs.index.name = "sample"
-    counts_i = counts.to_numpy().astype(np.int64)
+    counts_i = _as_int_counts(counts.to_numpy(), f"phyloseq otu_table ({rds_path})")
+    # A sample_data column literally named read_count would make insert() raise; our per-sample
+    # total is authoritative, so drop any existing one and put ours first.
+    if "read_count" in obs.columns:
+        obs = obs.drop(columns=["read_count"])
     obs.insert(0, "read_count", counts_i.sum(axis=1))
 
     adata = ad.AnnData(X=counts_i.astype(np.float32), obs=obs, var=var)
