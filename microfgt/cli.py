@@ -170,7 +170,17 @@ def _cmd_run(args: argparse.Namespace) -> None:
 def _cmd_check(args: argparse.Namespace) -> None:
     from microfgt.stages import check, speciateit_space_warnings
 
+    from microfgt.io import stage_samplesheet
+
     config = _load_config(args.config)
+    # If the entry point comes from a `samples:` sheet, stage it (as `run` does) so check sees
+    # the same FASTQ entry points — otherwise check is blind to sample-sheet configs. This also
+    # validates the sheet (unique ids, declared files exist) as part of the preflight.
+    if config.get("samples"):
+        try:
+            config = stage_samplesheet(config, tempfile.mkdtemp(prefix="microfgt_check_"))
+        except (ValueError, FileNotFoundError) as e:
+            raise SystemExit(f"sample sheet problem: {e}")
     results = check(config)
     for r in results:
         print(r.message)
