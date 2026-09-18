@@ -183,6 +183,45 @@ def test_run_emits_snakefile_in_snakemake_mode(tmp_path):
     assert "rule integrate:" in (wd / "Snakefile").read_text()
 
 
+def test_snakemake_mode_supports_sample_sheets(tmp_path):
+    """A `samples:` config now works in snakemake mode: the sheet is staged, a staged config is
+    written, and the Snakefile's `_run-stage` calls point at that staged config (so they see the
+    rewritten FASTQ entry points, not the original `samples:` config)."""
+    from microfgt.cli import main
+
+    raw = tmp_path / "raw"; raw.mkdir()
+    for s in ("PT01", "PT02"):
+        (raw / f"{s}_R1.fastq").write_text("@r\nACGT\n+\nIIII\n")
+        (raw / f"{s}_R2.fastq").write_text("@r\nTTTT\n+\nIIII\n")
+    sheet = tmp_path / "samples.csv"
+    sheet.write_text(
+        "sample_id,16s_R1,16s_R2,group\n"
+        f"PT01,{raw/'PT01_R1.fastq'},{raw/'PT01_R2.fastq'},BV\n"
+        f"PT02,{raw/'PT02_R1.fastq'},{raw/'PT02_R2.fastq'},Normal\n"
+    )
+    config = {
+        "samples": str(sheet),
+        "composition": {"reads": {"region": "V3V4", "primers": {"fwd": "AAAA", "rev": "TTTT"}}},
+        "output": str(tmp_path / "o.h5mu"),
+    }
+    cfg = tmp_path / "cfg.yaml"; cfg.write_text(yaml.safe_dump(config))
+    wd = tmp_path / "wd"
+
+    # Without --workdir a sample-sheet snakemake run is refused (staged reads would be temp).
+    with pytest.raises(SystemExit):
+        main(["run", "-c", str(cfg), "--executor", "snakemake"])
+
+    assert main(["run", "-c", str(cfg), "--workdir", str(wd), "--executor", "snakemake"]) == 0
+    staged_cfg = wd / "config.staged.yaml"
+    assert staged_cfg.exists()
+    staged = yaml.safe_load(staged_cfg.read_text())
+    assert "samples" not in staged                                   # sheet resolved away
+    assert staged["composition"]["reads"]["fastq_dir"] == str(wd / "staged" / "16s")
+    text = (wd / "Snakefile").read_text()
+    assert str(staged_cfg) in text                                   # rules read the staged config
+    assert str(cfg) not in text                                      # not the original
+
+
 def test_snakefile_wraps_directory_outputs_and_quotes_paths(tmp_path):
     """Regression for the two cluster-path bugs: directory artifacts must be declared with
     Snakemake's ``directory(...)`` (else Snakemake calls them missing), and every interpolated

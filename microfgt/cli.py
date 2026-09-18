@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import sys
 import tempfile
+from pathlib import Path
 
 from microfgt import __version__
 
@@ -110,6 +111,17 @@ def _load_config(path: str) -> dict:
     return load_config(path)
 
 
+def _dump_config(config: dict, path) -> None:
+    """Write a (possibly sample-sheet-staged) config back to YAML on disk, so the Snakemake
+    executor's per-rule ``microfgt _run-stage`` calls re-read the SAME resolved config —
+    including the FASTQ entry points that sample-sheet staging rewrote to the staged dirs."""
+    import yaml
+
+    from pathlib import Path
+
+    Path(path).write_text(yaml.safe_dump(config, sort_keys=False))
+
+
 def _attach_cst(mdata, cst_df) -> None:
     from microfgt.io.integrate import attach_cst_annotations
 
@@ -132,10 +144,13 @@ def _cmd_run(args: argparse.Namespace) -> None:
     out = args.output or config.get("output")
     if not out:
         raise SystemExit("No output path: pass -o/--output or set 'output:' in the config.")
-    if config.get("samples") and args.executor == "snakemake":
+    has_samplesheet = bool(config.get("samples"))
+    if has_samplesheet and args.executor == "snakemake" and args.workdir is None:
+        # The Snakefile references the staged sample sheet under the workdir; a throwaway temp
+        # workdir would leave the cluster run pointing at deleted symlinks.
         raise SystemExit(
-            "sample sheets aren't wired into the snakemake executor yet — "
-            "use --executor local (the default)."
+            "a sample-sheet run in snakemake mode needs an explicit --workdir "
+            "(the Snakefile and staged reads live there)."
         )
     auto_workdir = args.workdir is None
     workdir = args.workdir or tempfile.mkdtemp(prefix="microfgt_")
@@ -148,7 +163,17 @@ def _cmd_run(args: argparse.Namespace) -> None:
     plan = " -> ".join(s.id for s in stages) or "(nothing to do)"
 
     if args.executor == "snakemake":
-        path = SnakemakeExecutor().run(stages, args.config, workdir, out)
+        # Each Snakefile rule shells out to `microfgt _run-stage`, which re-reads the config from
+        # disk — so a sample-sheet run must hand those calls the STAGED config (FASTQ entry points
+        # already rewritten to the staged dirs), not the original that still says `samples:`.
+        config_path = args.config
+        if has_samplesheet:
+            config_path = str(Path(workdir) / "config.staged.yaml")
+            # The sheet is now resolved into FASTQ entry points; drop it so the persisted config
+            # is self-contained and `_run-stage` doesn't try to re-stage a relative sheet path.
+            config.pop("samples", None)
+            _dump_config(config, config_path)
+        path = SnakemakeExecutor().run(stages, config_path, workdir, out)
         print(f"entry-point plan: {plan}")
         print(f"wrote Snakefile: {path}\nsubmit on the cluster with snakemake + a Slurm profile.")
         return
