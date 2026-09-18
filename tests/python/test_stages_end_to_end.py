@@ -181,3 +181,62 @@ def test_run_emits_snakefile_in_snakemake_mode(tmp_path):
     assert main(["run", "-c", str(cfg), "--workdir", str(wd), "--executor", "snakemake"]) == 0
     assert (wd / "Snakefile").exists()
     assert "rule integrate:" in (wd / "Snakefile").read_text()
+
+
+def test_snakefile_wraps_directory_outputs_and_quotes_paths(tmp_path):
+    """Regression for the two cluster-path bugs: directory artifacts must be declared with
+    Snakemake's ``directory(...)`` (else Snakemake calls them missing), and every interpolated
+    path in the ``shell:`` command must be quoted so real paths (incl. spaces) survive."""
+    import shlex
+
+    from microfgt.stages.executors import SnakemakeExecutor
+    from microfgt.stages.model import DIRECTORY_ARTIFACTS, ARTIFACT_FILENAMES
+    from microfgt.stages.resolve import resolve
+
+    # Both-arms run from raw FASTQs so the graph includes every directory-output stage.
+    stages = resolve("mudata", {"fastq_dir", "sg_reads"})
+    # A workdir WITH A SPACE is the exact case bug #1 broke on (the repo's own path).
+    workdir = tmp_path / "work dir with space"
+    config = {
+        "composition": {"reads": {"fastq_dir": str(tmp_path / "16s")}},
+        "metagenomics": {"reads": {"fastq_dir": str(tmp_path / "sg")}},
+        "output": str(tmp_path / "o.h5mu"),
+    }
+    cfg = tmp_path / "cfg.yaml"; cfg.write_text(yaml.safe_dump(config))
+    text = SnakemakeExecutor().generate(stages, str(cfg), str(workdir))
+
+    # Every directory artifact that this graph produces is wrapped in directory().
+    produced = {k for s in stages for k in s.outputs}
+    for key in DIRECTORY_ARTIFACTS & produced:
+        path = ARTIFACT_FILENAMES[key]
+        assert f"directory({str(workdir / path)!r})" in text, f"{key} not wrapped in directory()"
+    # No directory artifact is emitted as a bare (file) output.
+    for key in DIRECTORY_ARTIFACTS & produced:
+        assert f"    output: {str(workdir / ARTIFACT_FILENAMES[key])!r}\n" not in text
+
+    # The spaced workdir is quoted in every shell line (bug #1) — never left bare.
+    shell_lines = [ln for ln in text.splitlines() if ln.strip().startswith("shell:")]
+    assert shell_lines
+    for line in shell_lines:
+        assert f"--workdir {shlex.quote(str(workdir))}" in line   # quoted form present
+        assert f"--workdir {workdir} " not in line                # the old bare (broken) form absent
+
+
+def test_no_file_artifact_nested_under_a_directory_artifact():
+    """Invariant: no file artifact's path may live inside a directory artifact's path. Snakemake
+    rejects a rule output nested in another rule's directory() output (ChildIOException), which is
+    what sank sg_compiled (it used to live inside the sg_virgo2_out map dir)."""
+    from pathlib import PurePosixPath
+
+    from microfgt.stages.model import ARTIFACT_FILENAMES, DIRECTORY_ARTIFACTS
+
+    dirs = {k: PurePosixPath(ARTIFACT_FILENAMES[k]) for k in DIRECTORY_ARTIFACTS}
+    for key, fn in ARTIFACT_FILENAMES.items():
+        if fn is None or key in DIRECTORY_ARTIFACTS:
+            continue
+        p = PurePosixPath(fn)
+        for dkey, dpath in dirs.items():
+            assert not p.is_relative_to(dpath), (
+                f"artifact {key!r} ({fn}) is nested inside directory artifact {dkey!r} ({dpath}) "
+                "— Snakemake will raise ChildIOException; give it its own top-level dir"
+            )

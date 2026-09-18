@@ -73,24 +73,31 @@ def run_virgo2_map(
 
 
 def run_virgo2_compile(
-    outdir, virgo2_dir, *, python: str = "python3", timeout: float | None = None,
+    outdir, virgo2_dir, *, compiled_dir=None, python: str = "python3",
+    timeout: float | None = None,
 ):
     """Compile all ``*.out`` in ``outdir`` into one gene x sample matrix.
 
+    The compiled matrix is written to ``compiled_dir`` (default: ``outdir``). The pipeline
+    passes a separate dir so the compiled file is NOT nested inside ``outdir`` — a directory
+    that is itself a Snakemake rule output (nesting is a ChildIOException).
+
     Returns ``(compiled_path, RunRecord)`` where compiled_path is
-    ``outdir/VIRGO2_Compiled.summary.NR.txt``.
+    ``<compiled_dir>/VIRGO2_Compiled.summary.NR.txt``.
     """
     py_exe, py_fp = resolve_executable(python, tool="python3 (VIRGO2)")
     script = _virgo2_script(virgo2_dir)
     outdir = Path(outdir).resolve()  # cwd=outdir below; keep argv paths absolute (see run_virgo2_map)
+    dest = Path(compiled_dir).resolve() if compiled_dir else outdir
+    dest.mkdir(parents=True, exist_ok=True)
 
     argv = [py_exe, str(script), "compile", "-i", str(outdir),
-            "-o", str(outdir / "VIRGO2_Compiled")]
+            "-o", str(dest / "VIRGO2_Compiled")]
     record = run_command(
         argv, tool="VIRGO2.compile", cwd=outdir,
         params={"virgo2_dir": str(virgo2_dir)}, exe_fingerprint=py_fp, timeout=timeout,
     )
-    compiled = outdir / COMPILED_NAME
+    compiled = dest / COMPILED_NAME
     if not compiled.exists():
         raise FileNotFoundError(
             f"VIRGO2 compile finished (rc={record.returncode}) but {compiled} was not "

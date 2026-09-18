@@ -34,12 +34,24 @@ ARTIFACT_FILENAMES: dict[str, str | None] = {
     "vista_output": None,            # provided: an existing VISTA mgCSTs_*.csv
     "sg_trimmed": "mg_trimmed",      # dir of fastp-trimmed FASTQs
     "sg_nonhost": "mg_nonhost",      # dir of host-removed FASTQs
-    "sg_virgo2_out": "mg_virgo2_out",  # dir of per-sample VIRGO2 .out + the compiled matrix
-    "sg_compiled": "mg_virgo2_out/VIRGO2_Compiled.summary.NR.txt",
+    "sg_virgo2_out": "mg_virgo2_out",  # dir of per-sample VIRGO2 .out files
+    # The compiled matrix lives in its OWN dir, a sibling of mg_virgo2_out — NOT inside it.
+    # A file output nested in another rule's directory() output is a Snakemake ChildIOException
+    # (the compile rule's output would sit under the map rule's directory output).
+    "sg_compiled": "mg_compiled/VIRGO2_Compiled.summary.NR.txt",
     "function": "function.h5ad",     # gene x sample (VIRGO2) modality
     "mgcst": "mgcst.csv",            # sample-keyed mgCST call
     "mudata": None,                  # the final target (= config 'output' / CLI -o)
 }
+
+# Artifacts that are DIRECTORIES rather than single files. Snakemake needs these wrapped in
+# ``directory(...)`` in a rule's ``output:`` — declared as a plain file, Snakemake reports the
+# output "missing" after the rule runs (it checks for a file at that path) and the DAG breaks.
+# The local executor doesn't care (it just runs stages in order), which is why this only bit the
+# cluster path. Kept here, beside the filenames, so the two stay in sync.
+DIRECTORY_ARTIFACTS: frozenset[str] = frozenset(
+    {"trimmed_reads", "sg_trimmed", "sg_nonhost", "sg_virgo2_out"}
+)
 
 
 @dataclass(frozen=True)

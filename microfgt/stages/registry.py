@@ -348,8 +348,11 @@ def _run_sg_virgo2_map(ctx: StageContext) -> None:
 def _run_sg_virgo2_compile(ctx: StageContext) -> None:
     from microfgt.orchestrate import run_virgo2_compile
 
+    # Write the compiled matrix to sg_compiled's own dir (a sibling of sg_virgo2_out), so the
+    # compile output is not nested inside the map stage's directory() output (ChildIOException).
     _, record = run_virgo2_compile(
         ctx.path("sg_virgo2_out"), _mg_require(ctx, "virgo2_dir"),
+        compiled_dir=ctx.path("sg_compiled").parent,
         python=_mg(ctx).get("python", "python3"),
     )
     _write_provenance(ctx, "sg_virgo2_compile", [record])
