@@ -21,18 +21,25 @@ def run_fastp(
     threads: int = 4,
     executable: str = "fastp",
     extra_args=None,
+    samples=None,
     timeout: float | None = None,
 ):
     """Trim every FASTQ pair in ``input_dir`` into ``output_dir`` with fastp.
 
     Trimmed reads keep their original filenames; each sample also gets a ``<sample>.qc.json``
     (and ``.qc.html``) report. Returns one RunRecord per sample.
+
+    ``samples`` (a collection of sample names) restricts processing to those samples — used by
+    the Snakemake executor to run one sample per cluster job (per-sample scatter).
     """
     exe, fingerprint = resolve_executable(executable, tool="fastp")
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     pairs = discover_pairs(input_dir)
+    if samples is not None:
+        wanted = set(samples)
+        pairs = [p for p in pairs if p[0] in wanted]
     if not pairs:
         raise FileNotFoundError(f"No '*_R1*.fastq*' files found in {input_dir}.")
 

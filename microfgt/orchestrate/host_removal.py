@@ -42,12 +42,16 @@ def run_host_removal(
     minimap2: str = "minimap2",
     samtools: str = "samtools",
     runner: str = "bash",
+    samples=None,
     timeout: float | None = None,
 ):
     """Remove host reads from every trimmed FASTQ pair in ``input_dir`` into ``output_dir``.
 
     Keeps only both-mates-unmapped pairs (``-f 12``). Non-host reads keep their original
     filenames. Returns one RunRecord per sample.
+
+    ``samples`` (a collection of sample names) restricts processing to those samples — used by
+    the Snakemake executor to run one sample per cluster job (per-sample scatter).
     """
     mm2_exe, mm2_fp = resolve_executable(minimap2, tool="minimap2")
     st_exe, _ = resolve_executable(samtools, tool="samtools")
@@ -62,6 +66,9 @@ def run_host_removal(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     pairs = discover_pairs(input_dir)
+    if samples is not None:
+        wanted = set(samples)
+        pairs = [p for p in pairs if p[0] in wanted]
     if not pairs:
         raise FileNotFoundError(f"No '*_R1*.fastq*' files found in {input_dir}.")
 

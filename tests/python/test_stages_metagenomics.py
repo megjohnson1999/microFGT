@@ -67,17 +67,23 @@ def test_snakemake_mode_emits_the_shotgun_rules(tmp_path):
 
     from microfgt.cli import main
 
+    raw = tmp_path / "raw"; raw.mkdir()
+    for s in ("A", "B"):
+        (raw / f"{s}_R1.fastq.gz").write_bytes(b"")
+        (raw / f"{s}_R2.fastq.gz").write_bytes(b"")
     cfg = tmp_path / "cfg.yaml"
     cfg.write_text(yaml.safe_dump({
-        "metagenomics": {"reads": {"fastq_dir": "raw/"}, "virgo2_dir": "/ref/VIRGO2",
+        "metagenomics": {"reads": {"fastq_dir": str(raw)}, "virgo2_dir": "/ref/VIRGO2",
                          "host_ref": "/ref/GRCh38.fna.gz", "vista_repo": "/ref/VISTA"},
         "output": str(tmp_path / "o.h5mu"),
     }))
     wd = tmp_path / "wd"
     assert main(["run", "-c", str(cfg), "--workdir", str(wd), "--executor", "snakemake"]) == 0
     snake = (wd / "Snakefile").read_text()
-    for rule in ("sg_qc", "sg_host_removal", "sg_virgo2_map", "sg_virgo2_compile",
-                 "import_function", "classify_mgcst", "integrate_shotgun"):
+    # Scatter stages fan out per sample; gather/whole-cohort stages stay single rules.
+    for stage in ("sg_qc", "sg_host_removal", "sg_virgo2_map"):
+        assert f"rule {stage}_A:" in snake and f"rule {stage}_B:" in snake
+    for rule in ("sg_virgo2_compile", "import_function", "classify_mgcst", "integrate_shotgun"):
         assert f"rule {rule}:" in snake
 
 

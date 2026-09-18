@@ -72,6 +72,7 @@ class StageContext:
     workdir: Path
     artifacts: dict[str, str]   # artifact key -> resolved path
     config: dict
+    sample: str | None = None   # set for a per-sample (scatter) execution; None = process all
 
     def path(self, key: str) -> Path:
         return Path(self.artifacts[key])
@@ -88,6 +89,26 @@ class Stage:
     requirements: Callable[[dict], list[Requirement]] = field(
         default=lambda cfg: []
     )
+    # A scatter stage runs once per sample (embarrassingly parallel). The local executor still
+    # runs it once and loops samples internally; the Snakemake executor emits one job per sample
+    # so the cluster actually fans them out. A stage's run fn honours ``ctx.sample`` when set.
+    scatter: bool = False
+
+
+def scatter_files(artifact_key: str, workdir, sample: str, r1_name: str, r2_name: str) -> list[str]:
+    """Concrete per-sample files a scatter artifact holds for one sample.
+
+    fastp and host-removal keep each read's filename, so a sample's R1/R2 basenames stay constant
+    down the trim -> host-removal chain — which lets the Snakemake generator name every per-sample
+    file up front. ``r1_name``/``r2_name`` are those basenames (from ``discover_pairs`` on the
+    entry FASTQ dir).
+    """
+    d = Path(workdir) / ARTIFACT_FILENAMES[artifact_key]
+    if artifact_key in ("trimmed_reads", "sg_trimmed", "sg_nonhost"):
+        return [str(d / n) for n in (r1_name, r2_name) if n]
+    if artifact_key == "sg_virgo2_out":
+        return [str(d / f"{sample}.out")]
+    raise KeyError(f"{artifact_key} is not a per-sample scatter artifact")
 
 
 def artifact_paths(workdir, config: dict, output: str | None = None) -> dict[str, str]:

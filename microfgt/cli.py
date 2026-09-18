@@ -101,6 +101,7 @@ def build_parser() -> argparse.ArgumentParser:
     rs.add_argument("--workdir", required=True)
     rs.add_argument("--config", required=True)
     rs.add_argument("--output")
+    rs.add_argument("--sample", help="Run a scatter stage for one sample (per-sample job).")
     rs.set_defaults(_run=_cmd_run_stage)
     return parser
 
@@ -263,7 +264,9 @@ def _cmd_setup(args: argparse.Namespace) -> None:
 def _cmd_run_stage(args: argparse.Namespace) -> None:
     from microfgt.stages import execute_stage
 
-    execute_stage(args.stage, args.workdir, _load_config(args.config), args.output)
+    execute_stage(
+        args.stage, args.workdir, _load_config(args.config), args.output, sample=args.sample
+    )
 
 
 def _cmd_classify(args: argparse.Namespace) -> None:

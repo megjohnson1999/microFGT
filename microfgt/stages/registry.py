@@ -291,7 +291,10 @@ def _write_provenance(ctx: StageContext, stage_id: str, records) -> None:
     prov_dir = ctx.workdir / "provenance"
     prov_dir.mkdir(parents=True, exist_ok=True)
     payload = [r.to_dict() for r in records]
-    (prov_dir / f"{stage_id}.json").write_text(json.dumps(payload, indent=2))
+    # Per-sample (scatter) executions each write their own file so parallel jobs don't clobber a
+    # shared <stage>.json; _collect_provenance globs *.json so all are picked up regardless.
+    name = f"{stage_id}.{ctx.sample}.json" if ctx.sample else f"{stage_id}.json"
+    (prov_dir / name).write_text(json.dumps(payload, indent=2))
 
 
 def _collect_provenance(workdir) -> dict:
@@ -310,6 +313,7 @@ def _run_sg_qc(ctx: StageContext) -> None:
     records = run_fastp(
         ctx.path("sg_reads"), ctx.path("sg_trimmed"),
         threads=_mg(ctx).get("threads", 4), executable=_mg(ctx).get("fastp", "fastp"),
+        samples=[ctx.sample] if ctx.sample else None,
     )
     _write_provenance(ctx, "sg_qc", records)
 
@@ -322,6 +326,7 @@ def _run_sg_host_removal(ctx: StageContext) -> None:
         threads=_mg(ctx).get("threads", 4),
         minimap2=_mg(ctx).get("minimap2", "minimap2"),
         samtools=_mg(ctx).get("samtools", "samtools"),
+        samples=[ctx.sample] if ctx.sample else None,
     )
     _write_provenance(ctx, "sg_host_removal", records)
 
@@ -333,6 +338,8 @@ def _run_sg_virgo2_map(ctx: StageContext) -> None:
     virgo2_dir = _mg_require(ctx, "virgo2_dir")
     outdir = ctx.path("sg_virgo2_out")
     pairs = discover_pairs(ctx.path("sg_nonhost"))
+    if ctx.sample:                      # per-sample scatter: map only this sample
+        pairs = [p for p in pairs if p[0] == ctx.sample]
     if not pairs:
         raise FileNotFoundError(f"No host-removed FASTQ pairs found in {ctx.path('sg_nonhost')}.")
     records = []
@@ -516,11 +523,11 @@ STAGES = [
     # (present only when the phyloseq object is the chosen CST source).
     Stage("cst_phyloseq", ("composition", "phyloseq_cst"), ("cst",), _run_cst_phyloseq),
     # --- metagenomics (shotgun) arm: reads -> compiled -> {function, mgcst} ---
-    Stage("sg_qc", ("sg_reads",), ("sg_trimmed",), _run_sg_qc, _req_sg_qc),
+    Stage("sg_qc", ("sg_reads",), ("sg_trimmed",), _run_sg_qc, _req_sg_qc, scatter=True),
     Stage("sg_host_removal", ("sg_trimmed",), ("sg_nonhost",),
-          _run_sg_host_removal, _req_sg_host_removal),
+          _run_sg_host_removal, _req_sg_host_removal, scatter=True),
     Stage("sg_virgo2_map", ("sg_nonhost",), ("sg_virgo2_out",),
-          _run_sg_virgo2_map, _req_sg_virgo2_map),
+          _run_sg_virgo2_map, _req_sg_virgo2_map, scatter=True),
     Stage("sg_virgo2_compile", ("sg_virgo2_out",), ("sg_compiled",),
           _run_sg_virgo2_compile, _req_sg_virgo2_compile),
     Stage("import_function", ("sg_compiled",), ("function",), _run_import_function),
@@ -545,12 +552,17 @@ for _s in STAGES:
         PRODUCERS.setdefault(_out, []).append(_s)
 
 
-def execute_stage(stage_id: str, workdir, config: dict, output: str | None = None) -> None:
-    """Run one stage by id (used by the local executor and the ``_run-stage`` CLI alike)."""
+def execute_stage(
+    stage_id: str, workdir, config: dict, output: str | None = None, sample: str | None = None
+) -> None:
+    """Run one stage by id (used by the local executor and the ``_run-stage`` CLI alike).
+
+    ``sample`` runs a scatter stage for a single sample (one cluster job per sample); None runs
+    it over all samples (the local executor's behaviour)."""
     from pathlib import Path
 
     stage = STAGE_BY_ID[stage_id]
     paths = artifact_paths(workdir, config, output)
     for out_key in stage.outputs:
         Path(paths[out_key]).parent.mkdir(parents=True, exist_ok=True)
-    stage.run(StageContext(Path(workdir), paths, config))
+    stage.run(StageContext(Path(workdir), paths, config, sample=sample))

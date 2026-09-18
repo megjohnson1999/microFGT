@@ -222,43 +222,54 @@ def test_snakemake_mode_supports_sample_sheets(tmp_path):
     assert str(cfg) not in text                                      # not the original
 
 
-def test_snakefile_wraps_directory_outputs_and_quotes_paths(tmp_path):
-    """Regression for the two cluster-path bugs: directory artifacts must be declared with
-    Snakemake's ``directory(...)`` (else Snakemake calls them missing), and every interpolated
-    path in the ``shell:`` command must be quoted so real paths (incl. spaces) survive."""
+def test_snakefile_scatters_shotgun_per_sample_and_gathers(tmp_path):
+    """The shotgun scatter stages emit one rule per sample (true cluster fan-out), the compile
+    stage gathers every per-sample .out, a non-scatter dir artifact stays directory()-wrapped, and
+    every interpolated shell path is quoted (survives spaces)."""
     import shlex
 
     from microfgt.stages.executors import SnakemakeExecutor
-    from microfgt.stages.model import DIRECTORY_ARTIFACTS, ARTIFACT_FILENAMES
     from microfgt.stages.resolve import resolve
 
-    # Both-arms run from raw FASTQs so the graph includes every directory-output stage.
+    # Two shotgun samples on disk so the generator can discover the scatter set.
+    sg = tmp_path / "sg"; sg.mkdir()
+    for s in ("SG1", "SG2"):
+        (sg / f"{s}_R1.fastq.gz").write_bytes(b"")
+        (sg / f"{s}_R2.fastq.gz").write_bytes(b"")
+
     stages = resolve("mudata", {"fastq_dir", "sg_reads"})
-    # A workdir WITH A SPACE is the exact case bug #1 broke on (the repo's own path).
-    workdir = tmp_path / "work dir with space"
+    workdir = tmp_path / "work dir with space"      # bug #1: a spaced path
     config = {
         "composition": {"reads": {"fastq_dir": str(tmp_path / "16s")}},
-        "metagenomics": {"reads": {"fastq_dir": str(tmp_path / "sg")}},
+        "metagenomics": {"reads": {"fastq_dir": str(sg)}},
         "output": str(tmp_path / "o.h5mu"),
     }
     cfg = tmp_path / "cfg.yaml"; cfg.write_text(yaml.safe_dump(config))
     text = SnakemakeExecutor().generate(stages, str(cfg), str(workdir))
 
-    # Every directory artifact that this graph produces is wrapped in directory().
-    produced = {k for s in stages for k in s.outputs}
-    for key in DIRECTORY_ARTIFACTS & produced:
-        path = ARTIFACT_FILENAMES[key]
-        assert f"directory({str(workdir / path)!r})" in text, f"{key} not wrapped in directory()"
-    # No directory artifact is emitted as a bare (file) output.
-    for key in DIRECTORY_ARTIFACTS & produced:
-        assert f"    output: {str(workdir / ARTIFACT_FILENAMES[key])!r}\n" not in text
+    # Per-sample scatter rules, one per (scatter stage, sample), each pinned to --sample.
+    for stage in ("sg_qc", "sg_host_removal", "sg_virgo2_map"):
+        for s in ("SG1", "SG2"):
+            assert f"rule {stage}_{s}:" in text
+    assert "--sample SG1" in text and "--sample SG2" in text
+    # sg_virgo2_map's per-sample output is the sample's .out (not a wrapped directory).
+    assert str(workdir / "mg_virgo2_out" / "SG1.out") in text
+    assert "directory(" not in text.split("rule sg_virgo2_map_SG1:")[1].split("rule ")[0]
 
-    # The spaced workdir is quoted in every shell line (bug #1) — never left bare.
+    # The compile (gather) rule pulls in every per-sample .out.
+    compile_block = text.split("rule sg_virgo2_compile:")[1].split("rule ")[0]
+    assert str(workdir / "mg_virgo2_out" / "SG1.out") in compile_block
+    assert str(workdir / "mg_virgo2_out" / "SG2.out") in compile_block
+
+    # A non-scatter directory artifact (16S primer-trim output) is still directory()-wrapped.
+    assert f"directory({str(workdir / 'trimmed')!r})" in text
+
+    # Every shell line quotes the spaced workdir (bug #1) — never bare.
     shell_lines = [ln for ln in text.splitlines() if ln.strip().startswith("shell:")]
     assert shell_lines
     for line in shell_lines:
-        assert f"--workdir {shlex.quote(str(workdir))}" in line   # quoted form present
-        assert f"--workdir {workdir} " not in line                # the old bare (broken) form absent
+        assert f"--workdir {shlex.quote(str(workdir))}" in line
+        assert f"--workdir {workdir} " not in line
 
 
 def test_no_file_artifact_nested_under_a_directory_artifact():
