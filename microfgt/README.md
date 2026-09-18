@@ -98,8 +98,9 @@ PT02,16s/PT02_R1.fastq.gz,16s/PT02_R2.fastq.gz,,,Normal
   together, so **give the same sample the same id in both arms**. That declared id is what
   flows through the whole run, so the arms integrate correctly regardless of how the raw
   filenames were named.
-- Read columns are optional; leave a cell blank for an arm a sample doesn't have. `_R2` is
-  optional (single-end reads use only `_R1`).
+- Read columns are optional; leave a cell blank for an arm a sample doesn't have.
+  **Note: v1's 16S arm is paired-end only** — a 16S sample needs both `_R1` and `_R2` (the
+  DADA2 stage errors on unpaired input; single-end amplicon support is not implemented yet).
 - Any extra columns (e.g. `group`) are carried onto the object as per-sample `.obs` metadata.
 
 Point a config at it with a top-level `samples:` key — per-run settings (region, primers, DB
@@ -150,17 +151,24 @@ This is the honest state, because it's what determines whether a result can be t
 **Stubs prove the plumbing; they do not prove the biology.** Anything marked ⚠️ has had
 its wiring exercised end-to-end but has never run against the real tool's output.
 
+> **Milestone (2026-09-17):** both running front-ends (16S *and* shotgun) have now been
+> validated on **real HTCF runs** against genuine vaginal 16S + shotgun data (PIN, and the
+> matched mother–daughter V3V4 cohort PRJNA779415) — moving the rows below from ⚠️ to ✅.
+> Honest caveats: small *n* (a handful of samples), correctness is *spot-checked* (biologically
+> sensible calls + the V3V4 ground-truth), **not** benchmarked against a labeled gold standard;
+> and v1 is **paired-end only** (the DADA2 stage requires R1+R2). The cluster path is still unrun.
+
 | Piece | Status |
 |---|---|
-| **Centroid CST → VALENCIA** | ✅ **Validated against ground truth (on the 2020 centroids)** — 99.94% subCST agreement on all 13,231 published samples (≥99.9% target), plus exact reproduction of genuine `Valencia.py` output on the head fixture. **Caveat:** that 99.94% is the *2020 paper-reproduction* set; the shipped **default is the 2024 (VALENCIA2) set** — recommended because it matches modern speciateIT taxonomy, but not itself benchmarked against a 2024-named gold standard (none is published). Select the validated set with `cst: {reference: "2020"}` (or `microfgt classify --reference 2020`) for paper-comparable calls. |
+| **Centroid CST → VALENCIA** | ✅ **Validated against ground truth (on the 2020 centroids)** — 99.94% subCST agreement on all 13,231 published samples (≥99.9% target), plus exact reproduction of genuine `Valencia.py` output on the head fixture. **Caveat:** that 99.94% is the *2020 paper-reproduction* set; the shipped **default is the 2024 (VALENCIA2) set** — recommended because it matches modern speciateIT taxonomy, but not itself benchmarked against a 2024-named gold standard (none is published). Select the validated set with `cst: {reference: "2020"}` (or `microfgt classify --reference 2020`) for paper-comparable calls. **Re-confirmed 2026-09-17 on pandas-3.0 / scikit-bio-0.7 — 99.94% holds** (no drift from the newer libraries). |
 | `import_virgo` | ✅ Real-output validated (`virgo_sub*.out`). |
 | `import_valencia` | ✅ Real-output validated (`valencia_genuine_output_head.csv`). |
 | `import_virgo2` / `import_mgcst` (VISTA) | ✅ Real-output validated against the public ENA/PRJEB34536 fixtures (compiled gene matrix + taxon/KEGG annotation; genuine `vista_mgCSTs.csv`). |
-| `import_speciateit` | ⚠️ Unit-tested against a fixture built from the tool's README, **not** a genuine `MC_order7_results.txt`. Logic ported from speciateIT's `count_table.py` + `FORMATS.md`. |
-| Orchestration wrappers (speciateIT, VIRGO v1) | ⚠️ Validated via **stub executables** that emit the documented formats — wiring only. |
-| Preprocessing ladder (cutadapt, DADA2) | ⚠️ Validated via **stubs** end-to-end (FASTQs → `.h5mu`) — plumbing, not real denoising. |
-| Shotgun running front-end (fastp, minimap2 host removal, VIRGO2 map/compile, VISTA) | ⚠️ Validated via **stubs** end-to-end (reads → `.h5mu`) — plumbing, not biology. |
-| Snakemake/Slurm executor | ⚠️ Snakefile is generated and asserted, but **never yet run on a cluster**. |
+| `import_speciateit` | ✅ **Real-output validated (2026-09-17)** — parsed genuine `MC_order7_results.txt` on real HTCF runs (PIN V1V3 + the matched mother–daughter V3V4 cohort PRJNA779415); the V3V4 `setup` ground-truth check matches 9/10 README species (+1 documented DB-version drift). |
+| Orchestration wrappers (speciateIT, VIRGO2) | ✅ **Run against the real tools on HTCF (2026-09-17)** — speciateIT classifies real ASVs correctly; VIRGO2 maps + compiles real vaginal shotgun reads. |
+| Preprocessing ladder (cutadapt, DADA2) | ✅ **Real-run validated (2026-09-17)** — real vaginal 16S denoised end-to-end (PIN V1V3; PRJNA779415 V3V4 with the built-in default `trunc_len`, no tuning), yielding biologically-correct taxa + CSTs. |
+| Shotgun running front-end (fastp, minimap2 host removal, VIRGO2 map/compile, VISTA) | ✅ **Run end-to-end on real vaginal shotgun (2026-09-17)** → genuine VISTA mgCST calls, and the **clean both-arms integration validated** on the matched mother–daughter V3V4 cohort (PRJNA779415): 5/5 samples integrated across both arms, with 16S CST and shotgun mgCST **concordant per sample** (e.g. *L. crispatus* → CST I / mgCST 4; *Gardnerella* → CST IV-B). |
+| Snakemake/Slurm executor | ⚠️ Snakefile is generated and asserted, but **never yet run on a cluster** — and has known path-quoting / directory-output bugs (see `design/refinement_backlog.md`). Real runs to date use the local executor. |
 
 Run the suite (the CST gate needs VALENCIA's ~8 MB published dataset — stage it
 with `python validation/fetch_valencia_published_data.py`, else it skips):
@@ -171,15 +179,24 @@ pytest -q
 
 ### Open validation IOUs
 
-Two gaps remain, both requiring a real run rather than more code:
+**Discharged 2026-09-17** by real HTCF runs on genuine vaginal data (PIN V1V3; the matched
+mother–daughter V3V4 cohort PRJNA779415):
 
-1. **speciateIT real-output** — `import_speciateit` has never parsed genuine classifier
-   output. Discharged by one real `MC_order7_results.txt` (the importer check needs only
-   the small output file; *producing* it needs the ~2.6 GB models).
-2. **Real tool run** — both running front-ends (16S: cutadapt + DADA2 + speciateIT;
-   shotgun: fastp + minimap2 + VIRGO2 + VISTA) and the cluster path are proven only with
-   stubs. Discharged by one real run of each front-end on a small set; the 16S run also
-   discharges #1.
+1. ~~**speciateIT real-output**~~ — `import_speciateit` now parses genuine
+   `MC_order7_results.txt`, and the V3V4 `setup` ground-truth check matches 9/10 README species
+   (+1 documented DB-version drift).
+2. ~~**Real tool run (front-ends)**~~ — both running front-ends validated on real reads: 16S
+   (cutadapt → DADA2 → speciateIT) yields biologically-correct taxa/CSTs; shotgun
+   (fastp → minimap2 → VIRGO2 → VISTA) runs end-to-end to genuine mgCST calls.
+
+**Still open:**
+
+- **Cluster path** — the Snakemake/Slurm executor has never run on a cluster (the real runs
+  used the local executor) and has known path-quoting / directory-output bugs
+  (`design/refinement_backlog.md`). Discharge by a real cluster submission after those fixes.
+- **Scale + correctness benchmarking** — real runs so far are small-*n* and correctness is
+  spot-checked (biologically sensible calls; V3V4 ground-truth), not benchmarked against a
+  labeled gold standard.
 
 ## External tools & reference data
 

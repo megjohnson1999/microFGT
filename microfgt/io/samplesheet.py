@@ -14,8 +14,11 @@ Format (one row per sample; a CSV)::
 
 - ``sample_id`` is required, non-empty, and unique — it is the join key across arms.
 - The read columns are optional and recognised case-insensitively. A sample may have one arm
-  or both; leave a cell blank when that arm wasn't sequenced for that sample. ``_R2`` is
-  optional (single-end reads use only ``_R1``).
+  or both; leave a cell blank when that arm wasn't sequenced for that sample.
+- **v1 supports paired-end 16S only.** The DADA2 denoise stage (``scripts/dada2_run.R``)
+  requires both ``16s_R1`` and ``16s_R2`` and errors on unpaired input — single-end amplicon
+  reads are not yet supported (tracked in ``design/refinement_backlog.md``). A blank
+  ``16s_R2`` is accepted by the sheet but the 16S run will fail without it.
 - Every other column is carried through as sample metadata (wired to the integrated object's
   ``.obs`` in a later step).
 

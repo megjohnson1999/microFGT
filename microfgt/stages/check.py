@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from microfgt.stages.registry import provided_artifacts
-from microfgt.stages.resolve import resolve
+from microfgt.stages.resolve import StageResolutionError, resolve
 
 
 @dataclass
@@ -116,9 +116,22 @@ def speciateit_space_warnings(config: dict, workdir=None, target: str = "mudata"
 
 
 def check(config: dict, target: str = "mudata") -> list[CheckResult]:
-    """Verify the tools/paths needed for the stages that WILL run for these inputs."""
+    """Verify the tools/paths needed for the stages that WILL run for these inputs.
+
+    Note: a ``samples:`` sheet must be staged (``stage_samplesheet``) into the config before
+    calling this, so its FASTQ entry points are present — the CLI does that. Without an entry
+    point, resolution fails and this reports a clean "no usable entry point" result rather than
+    raising.
+    """
     provided = set(provided_artifacts(config))
-    stages = resolve(target, provided)
+    try:
+        stages = resolve(target, provided)
+    except StageResolutionError as e:
+        return [CheckResult(
+            False,
+            f"MISS no usable entry point from this config ({e}). Provide reads/an ASV table/"
+            "existing tool outputs (or a `samples:` sheet).",
+        )]
     stage_ids = {s.id for s in stages}
 
     results: list[CheckResult] = []
